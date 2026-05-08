@@ -52,8 +52,8 @@ class SensorHelper(context: Context) : SensorEventListener {
     fun getSensorStatus(): String {
         return when {
             accelerometer != null && gyroscope != null -> "Full Monitoring Active"
-            accelerometer != null -> "Gyroscope Unavailable - Fallback Mode"
-            else -> "No compatible sensors found"
+            accelerometer != null -> "Gyroscope Unavailable - Using Fallback Motion Detection"
+            else -> "Hardware incompatible for monitoring"
         }
     }
 

@@ -1,264 +1,294 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/background_soft">
+    android:background="@color/background_main">
 
-    <ScrollView
+    <!-- Header Section -->
+    <View
+        android:id="@+id/topBar"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:fillViewport="true">
+        android:layout_height="120dp"
+        android:background="@drawable/gradient_header"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/tvGreeting"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="24dp"
+        android:layout_marginTop="40dp"
+        android:text="Hello, User!"
+        android:textColor="@color/white"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <ImageButton
+        android:id="@+id/btnLogout"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginEnd="16dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_lock_power_off"
+        app:tint="@color/white"
+        app:layout_constraintBottom_toBottomOf="@id/tvGreeting"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="@id/tvGreeting" />
+
+    <!-- Main Status Card -->
+    <com.google.android.material.card.MaterialCardView
+        android:id="@+id/cardStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="24dp"
+        android:layout_marginTop="-30dp"
+        app:cardCornerRadius="24dp"
+        app:cardElevation="8dp"
+        app:layout_constraintTop_toBottomOf="@id/topBar">
 
         <androidx.constraintlayout.widget.ConstraintLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:padding="20dp">
 
+            <View
+                android:id="@+id/indicatorDot"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:background="@drawable/circle_indicator"
+                android:backgroundTint="@color/status_safe"
+                app:layout_constraintBottom_toBottomOf="@id/tvSystemStatus"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="@id/tvSystemStatus" />
+
             <TextView
-                android:id="@+id/tvHeader"
+                android:id="@+id/tvSystemStatus"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="@string/header_title"
-                android:textSize="28sp"
+                android:layout_marginStart="12dp"
+                android:text="System Ready"
+                android:textColor="@color/text_main"
+                android:textSize="18sp"
                 android:textStyle="bold"
-                android:textColor="@color/primary_dark"
-                app:layout_constraintTop_toTopOf="parent"
-                app:layout_constraintStart_toStartOf="parent" />
+                app:layout_constraintStart_toEndOf="@id/indicatorDot"
+                app:layout_constraintTop_toTopOf="parent" />
 
-            <!-- Monitoring Status -->
-            <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardStatus"
+            <TextView
+                android:id="@+id/tvStatusDesc"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="Monitoring is currently inactive. Press Start to begin."
+                android:textColor="@color/text_secondary"
+                android:textSize="13sp"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="@id/tvSystemStatus"
+                app:layout_constraintTop_toBottomOf="@id/tvSystemStatus" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnToggle"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="20dp"
+                android:text="START MONITORING"
+                android:textStyle="bold"
+                app:cornerRadius="16dp"
+                app:layout_constraintTop_toBottomOf="@id/tvStatusDesc" />
+
+        </androidx.constraintlayout.widget.ConstraintLayout>
+    </com.google.android.material.card.MaterialCardView>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:fillViewport="true"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/cardStatus">
+
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="24dp">
+
+            <!-- Metrics Section -->
+            <TextView
+                android:id="@+id/tvMetricsLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Live Sensor Data"
+                android:textColor="@color/text_main"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <GridLayout
+                android:id="@+id/gridMetrics"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
+                android:layout_marginTop="12dp"
+                android:columnCount="2"
+                app:layout_constraintTop_toBottomOf="@id/tvMetricsLabel">
+
+                <!-- G-Force Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_marginEnd="6dp"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="G-Force" android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvGValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1.00 G" android:textSize="24sp" android:textStyle="bold" android:textColor="@color/primary"/>
+                        <TextView android:id="@+id/tvPeakG" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Peak: 1.00" android:textSize="11sp"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- Accel Card -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_marginStart="6dp"
+                    android:layout_marginBottom="12dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Accelerometer" android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvAccX" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X: 0.0" android:textSize="12sp" android:fontFamily="monospace"/>
+                        <TextView android:id="@+id/tvAccY" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y: 0.0" android:textSize="12sp" android:fontFamily="monospace"/>
+                        <TextView android:id="@+id/tvAccZ" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: 9.8" android:textSize="12sp" android:fontFamily="monospace"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+            </GridLayout>
+
+            <!-- Location Section -->
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardLocation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="2dp"
-                app:layout_constraintTop_toBottomOf="@id/tvHeader">
-
+                app:layout_constraintTop_toBottomOf="@id/gridMetrics">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="horizontal"
                     android:padding="16dp"
                     android:gravity="center_vertical">
-
-                    <View
-                        android:id="@+id/indicatorDot"
-                        android:layout_width="12dp"
-                        android:layout_height="12dp"
-                        android:background="@drawable/circle_indicator"
-                        android:backgroundTint="@color/status_safe" />
-
-                    <TextView
-                        android:id="@+id/tvSystemStatus"
-                        android:layout_width="wrap_content"
+                    <ImageView
+                        android:layout_width="32dp"
+                        android:layout_height="32dp"
+                        android:src="@android:drawable/ic_menu_mylocation"
+                        app:tint="@color/primary"/>
+                    <LinearLayout
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:text="@string/status_idle"
-                        android:layout_marginStart="12dp"
-                        android:textStyle="bold"
-                        android:textSize="16sp" />
+                        android:layout_weight="1"
+                        android:orientation="vertical"
+                        android:layout_marginStart="16dp">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live Location Sharing" android:textStyle="bold" android:textColor="@color/text_main"/>
+                        <TextView android:id="@+id/tvLocationCoords" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Searching for GPS..." android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- G-Force Monitor -->
+            <!-- Emergency Contacts -->
+            <TextView
+                android:id="@+id/tvContactsLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="Emergency Contacts"
+                android:textColor="@color/text_main"
+                android:textStyle="bold"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/cardLocation" />
+
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardG"
+                android:id="@+id/cardContacts"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardCornerRadius="20dp"
-                app:cardElevation="4dp"
-                app:cardBackgroundColor="@color/primary"
-                app:layout_constraintTop_toBottomOf="@id/cardStatus">
-
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="2dp"
+                app:layout_constraintTop_toBottomOf="@id/tvContactsLabel">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="24dp">
-
+                    android:padding="16dp">
                     <TextView
+                        android:id="@+id/tvContactInfo"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="@string/gforce_label"
-                        android:textColor="@color/white"
-                        android:alpha="0.8"
-                        android:textSize="12sp"
-                        android:letterSpacing="0.1" />
-
-                    <TextView
-                        android:id="@+id/tvGValue"
+                        android:text="No contacts added yet."
+                        android:textColor="@color/text_secondary"/>
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnEditProfile"
+                        style="@style/Widget.MaterialComponents.Button.TextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="1.00 G"
-                        android:textColor="@color/white"
-                        android:textSize="44sp"
-                        android:textStyle="bold" />
-
-                    <TextView
-                        android:id="@+id/tvPeakG"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Peak Impact: 1.00 G"
-                        android:textColor="@color/white"
-                        android:alpha="0.9"
-                        android:layout_marginTop="4dp" />
+                        android:text="Update Contacts"
+                        android:layout_gravity="end"/>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
-            <!-- Accel/Gyro Grid -->
-            <LinearLayout
-                android:id="@+id/sensorGrid"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:orientation="horizontal"
-                app:layout_constraintTop_toBottomOf="@id/cardG">
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginEnd="8dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Accelerometer"
-                            android:textStyle="bold"
-                            android:textColor="@color/primary_dark"/>
-                        <TextView android:id="@+id/tvAccX" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X: 0.0" android:fontFamily="monospace" android:layout_marginTop="4dp"/>
-                        <TextView android:id="@+id/tvAccY" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y: 0.0" android:fontFamily="monospace"/>
-                        <TextView android:id="@+id/tvAccZ" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: 9.8" android:fontFamily="monospace"/>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-
-                <com.google.android.material.card.MaterialCardView
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:layout_marginStart="8dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:orientation="vertical"
-                        android:padding="16dp">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Gyroscope"
-                            android:textStyle="bold"
-                            android:textColor="@color/primary_dark"/>
-                        <TextView android:id="@+id/tvGyroX" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X: 0.0" android:fontFamily="monospace" android:layout_marginTop="4dp"/>
-                        <TextView android:id="@+id/tvGyroY" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y: 0.0" android:fontFamily="monospace"/>
-                        <TextView android:id="@+id/tvGyroZ" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: 0.0" android:fontFamily="monospace"/>
-                    </LinearLayout>
-                </com.google.android.material.card.MaterialCardView>
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/tvSensorStatus"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Detecting hardware sensors..."
-                android:textSize="12sp"
-                android:textColor="@android:color/darker_gray"
-                android:layout_marginTop="8dp"
-                android:gravity="center"
-                app:layout_constraintTop_toBottomOf="@id/sensorGrid" />
-
-            <!-- Buttons -->
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnToggle"
-                android:layout_width="match_parent"
-                android:layout_height="64dp"
-                android:text="@string/btn_start"
-                android:layout_marginTop="24dp"
-                app:cornerRadius="16dp"
-                app:layout_constraintTop_toBottomOf="@id/tvSensorStatus" />
-
             <com.google.android.material.button.MaterialButton
                 android:id="@+id/btnResetMetrics"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="Reset Peak Data"
-                android:layout_marginTop="8dp"
-                app:layout_constraintTop_toBottomOf="@id/btnToggle" />
+                android:layout_height="56dp"
+                android:layout_marginTop="24dp"
+                android:text="RESET ANALYTICS"
+                app:cornerRadius="16dp"
+                app:layout_constraintTop_toBottomOf="@id/cardContacts" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </ScrollView>
 
-    <!-- Emergency Countdown Overlay (Hidden by default) -->
-    <androidx.constraintlayout.widget.ConstraintLayout
-        android:id="@+id/layoutCountdown"
+    <!-- Overlay Containers (Hidden by default) -->
+    <FrameLayout
+        android:id="@+id/overlayContainer"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:background="#F2FFFFFF"
+        android:elevation="20dp"
         android:visibility="gone"
-        android:clickable="true"
-        android:focusable="true">
+        tools:visibility="gone">
 
-        <TextView
-            android:id="@+id/tvAlertTitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="@string/crash_detected_title"
-            android:textColor="@color/status_crash"
-            android:textSize="32sp"
-            android:textStyle="bold"
-            app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="80dp" />
+        <!-- Countdown Layout (Imported or embedded) -->
+        <include
+            android:id="@+id/includeCountdown"
+            layout="@layout/layout_countdown"
+            android:visibility="gone"/>
 
-        <TextView
-            android:id="@+id/tvAlertDesc"
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:text="@string/crash_detected_desc"
-            android:gravity="center"
-            android:textSize="16sp"
-            android:layout_marginHorizontal="40dp"
-            android:layout_marginTop="16dp"
-            app:layout_constraintTop_toBottomOf="@id/tvAlertTitle"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
+        <!-- Emergency Active Layout -->
+        <include
+            android:id="@+id/includeEmergencyActive"
+            layout="@layout/layout_emergency_active"
+            android:visibility="gone"/>
 
-        <TextView
-            android:id="@+id/tvTimer"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="20"
-            android:textSize="120sp"
-            android:textStyle="bold"
-            android:textColor="@color/primary_dark"
-            app:layout_constraintTop_toBottomOf="@id/tvAlertDesc"
-            app:layout_constraintStart_toStartOf="parent"
-            app:layout_constraintEnd_toEndOf="parent"
-            android:layout_marginTop="40dp" />
+        <!-- Profile Editor Layout -->
+        <include
+            android:id="@+id/includeProfileEditor"
+            layout="@layout/layout_profile_editor"
+            android:visibility="gone"/>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/btnCancelAlert"
-            android:layout_width="match_parent"
-            android:layout_height="64dp"
-            android:text="@string/btn_cancel_alert"
-            android:layout_marginHorizontal="40dp"
-            android:layout_marginBottom="60dp"
-            app:cornerRadius="16dp"
-            app:backgroundTint="@color/status_safe"
-            app:layout_constraintBottom_toBottomOf="parent" />
+    </FrameLayout>
 
-    </androidx.constraintlayout.widget.ConstraintLayout>
-
-</FrameLayout>
+</androidx.constraintlayout.widget.ConstraintLayout>
