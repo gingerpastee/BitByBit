@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primary">#2196F3</color>
+    <color name="primary_light">#BBDEFB</color>
+    <color name="primary_dark">#1976D2</color>
+    <color name="accent">#03A9F4</color>
+
+    <color name="status_safe">#4CAF50</color>
+    <color name="status_monitoring">#FFC107</color>
+    <color name="status_crash">#F44336</color>
+
+    <color name="background_soft">#F5F9FF</color>
+    <color name="card_background">#FFFFFF</color>
+
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+</resources>
