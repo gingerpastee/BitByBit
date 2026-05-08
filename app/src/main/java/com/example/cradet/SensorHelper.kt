@@ -25,6 +25,9 @@ class SensorHelper(context: Context) : SensorEventListener {
     // Callbacks
     private var onDataUpdate: ((accel: FloatArray, gyro: FloatArray, gForce: Float, status: String) -> Unit)? = null
     private var onPotentialCrash: (() -> Unit)? = null
+    
+    // Smart Filter Check
+    var isWatchStable: (() -> Boolean)? = null
 
     // State
     private var lastAccel = FloatArray(3)
@@ -34,10 +37,10 @@ class SensorHelper(context: Context) : SensorEventListener {
     private var impactDetected = false
     
     // Detection Constants
-    private val IMPACT_G_THRESHOLD = 3.5f       // Trigger impact state above 3.5G
-    private val STILLNESS_G_THRESHOLD = 1.2f    // Back to near 1G means still
-    private val STILLNESS_GYRO_THRESHOLD = 0.5f // Low rotation means still
-    private val INACTIVITY_DELAY = 2500L        // Wait 2.5s to confirm inactivity
+    private val IMPACT_G_THRESHOLD = 3.2f       // Lowered slightly for better sensitivity
+    private val STILLNESS_G_THRESHOLD = 1.3f    
+    private val STILLNESS_GYRO_THRESHOLD = 0.6f 
+    private val INACTIVITY_DELAY = 3000L        // Wait 3s to confirm inactivity
 
     private val handler = Handler(Looper.getMainLooper())
 
@@ -52,8 +55,8 @@ class SensorHelper(context: Context) : SensorEventListener {
     fun getSensorStatus(): String {
         return when {
             accelerometer != null && gyroscope != null -> "Full Monitoring Active"
-            accelerometer != null -> "Gyroscope Unavailable - Using Fallback Motion Detection"
-            else -> "Hardware incompatible for monitoring"
+            accelerometer != null -> "Gyroscope Unavailable - Basic Detection"
+            else -> "Hardware incompatible"
         }
     }
 
@@ -71,7 +74,7 @@ class SensorHelper(context: Context) : SensorEventListener {
         
         isMonitoring = true
         impactDetected = false
-        Log.d("SensorHelper", "Monitoring started. Status: ${getSensorStatus()}")
+        Log.d("SensorHelper", "Monitoring started.")
     }
 
     fun stop() {
@@ -88,7 +91,6 @@ class SensorHelper(context: Context) : SensorEventListener {
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 lastAccel = event.values.clone()
-                // G-Force = Magnitude / Gravity (9.81)
                 val mag = sqrt(lastAccel[0] * lastAccel[0] + lastAccel[1] * lastAccel[1] + lastAccel[2] * lastAccel[2])
                 currentGForce = mag / 9.81f
                 checkImpact(currentGForce)
@@ -104,9 +106,9 @@ class SensorHelper(context: Context) : SensorEventListener {
     private fun checkImpact(gForce: Float) {
         if (gForce > IMPACT_G_THRESHOLD && !impactDetected) {
             impactDetected = true
-            Log.w("SensorHelper", "High G-force impact detected: $gForce G")
+            Log.w("SensorHelper", "Impact detected: $gForce G. Verifying...")
             
-            // Multi-sensor Confirmation: Wait to see if phone is inactive after impact
+            // Wait to see if phone is inactive after impact
             handler.postDelayed({
                 confirmCrash()
             }, INACTIVITY_DELAY)
@@ -119,13 +121,19 @@ class SensorHelper(context: Context) : SensorEventListener {
         val gyroMag = sqrt(lastGyro[0] * lastGyro[0] + lastGyro[1] * lastGyro[1] + lastGyro[2] * lastGyro[2])
         
         // Logical Check: If current G-Force is back to normal AND rotation is low
-        // It means a massive impact happened followed by the phone not moving (unconscious/dropped)
         val isStill = currentGForce < STILLNESS_G_THRESHOLD && 
                       (!hasGyroscope() || gyroMag < STILLNESS_GYRO_THRESHOLD)
 
         if (isStill) {
-            Log.e("SensorHelper", "Crash Confirmed: Post-impact inactivity detected.")
-            onPotentialCrash?.invoke()
+            // Smart False Positive Filter:
+            // If watch is connected and stable, it might just be a phone drop.
+            if (isWatchStable?.invoke() == true) {
+                Log.d("SensorHelper", "Crash Rejected: Smartwatch remains stable (Likely Phone Drop).")
+                impactDetected = false
+            } else {
+                Log.e("SensorHelper", "Crash Confirmed: Post-impact inactivity and watch instability.")
+                onPotentialCrash?.invoke()
+            }
         } else {
             Log.d("SensorHelper", "Crash Rejected: Movement detected after impact.")
             impactDetected = false

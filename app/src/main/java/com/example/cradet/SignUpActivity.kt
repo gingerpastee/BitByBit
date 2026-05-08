@@ -31,7 +31,7 @@ class SignUpActivity : AppCompatActivity() {
             if (name.isNotEmpty() && email.isNotEmpty() && pass.isNotEmpty()) {
                 if (authManager.signUp(email, pass)) {
                     android.util.Log.d("SignUpActivity", "SignUp success for $email. Saving profile and auto-logging in.")
-                    profileManager.saveProfile(name, blood, allergies)
+                    profileManager.saveProfile(name, email, blood, allergies)
                     
                     // Auto-login after sign up
                     authManager.setLoggedIn(email)

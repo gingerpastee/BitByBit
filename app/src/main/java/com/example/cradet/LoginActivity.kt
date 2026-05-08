@@ -33,7 +33,9 @@ class LoginActivity : AppCompatActivity() {
                 if (authManager.login(email, pass)) {
                     android.util.Log.d("LoginActivity", "Login success. Redirecting to MainActivity")
                     authManager.setLoggedIn(email)
-                    startActivity(Intent(this, MainActivity::class.java))
+                    val intent = Intent(this, MainActivity::class.java)
+                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                    startActivity(intent)
                     finish()
                 } else {
                     android.util.Log.d("LoginActivity", "Login failed. Invalid credentials")

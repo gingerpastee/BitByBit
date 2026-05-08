@@ -1,9 +1,12 @@
 package com.example.cradet
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
-import android.location.Location
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.View
@@ -17,60 +20,100 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var sensorHelper: SensorHelper
-    private lateinit var countdownManager: CountdownManager
     private lateinit var profileManager: ProfileManager
     private lateinit var authManager: AuthManager
     private lateinit var locationHelper: LocationHelper
-    private lateinit var smsHelper: SmsHelper
 
-    private var isMonitoring = false
-    private var isEmergencyMode = false
     private var peakGForce = 1.0f
-    private var lastLocation: Location? = null
-
     private val PERMISSION_REQUEST_CODE = 100
+
+    private val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when (intent?.action) {
+                "SENSOR_UPDATE" -> {
+                    val accel = intent.getFloatArrayExtra("accel") ?: floatArrayOf(0f, 0f, 0f)
+                    val gForce = intent.getFloatExtra("gForce", 1.0f)
+                    updateSensorUI(accel, gForce)
+                }
+                "BLE_CONNECTION_UPDATE" -> {
+                    val connected = intent.getBooleanExtra("connected", false)
+                    val name = intent.getStringExtra("name")
+                    updateBleUI(connected, name)
+                }
+                "METRICS_UPDATE" -> {
+                    val rssi = intent.getIntExtra("rssi", 0)
+                    val distance = intent.getDoubleExtra("distance", 0.0)
+                    val hr = intent.getIntExtra("hr", 0)
+                    val spo2 = intent.getIntExtra("spo2", 0)
+                    val bp = intent.getStringExtra("bp") ?: "--/--"
+                    
+                    updateRssiUI(rssi, distance)
+                    updateVitalsUI(hr, spo2, bp)
+                }
+                "VOICE_DETECTION" -> {
+                    val phrase = intent.getStringExtra("phrase") ?: "HELP"
+                    binding.tvVoiceStatus.text = phrase
+                    Toast.makeText(this@MainActivity, "🎤 Distress Detected: $phrase", Toast.LENGTH_LONG).show()
+                }
+                "COUNTDOWN_TICK" -> {
+                    val seconds = intent.getIntExtra("seconds", 20)
+                    binding.includeCountdown.tvTimer.text = seconds.toString()
+                }
+                "EMERGENCY_START" -> {
+                    showOverlay(binding.includeCountdown.root)
+                    binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.status_crash)
+                }
+                "EMERGENCY_EXECUTED" -> {
+                    showOverlay(binding.includeEmergencyActive.root)
+                }
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        Log.d("MainActivity", "onCreate called")
         
+        // Fix for potential "BAD_DECRYPT" / "RegistryDataStore" errors
+        DataStoreFixer.cleanCorruptedRegistries(this)
+
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        // Initialize Helpers
-        sensorHelper = SensorHelper(this)
         profileManager = ProfileManager(this)
         authManager = AuthManager(this)
         locationHelper = LocationHelper(this)
-        smsHelper = SmsHelper(this)
-        
-        countdownManager = CountdownManager(
-            onTickCallback = { seconds ->
-                runOnUiThread {
-                    binding.includeCountdown.tvTimer.text = seconds.toString()
-                }
-            },
-            onFinishCallback = {
-                runOnUiThread {
-                    executeEmergencyProtocol()
-                }
-            }
-        )
 
         checkPermissions()
         setupUI()
-        setupSensorListeners()
         loadProfileData()
-        refreshLocation()
+        startMonitoringService()
+    }
+
+    private fun startMonitoringService() {
+        val serviceIntent = Intent(this, MonitoringService::class.java)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent)
+        } else {
+            startService(serviceIntent)
+        }
+        Log.d("MainActivity", "Foreground service started for auto-monitoring")
     }
 
     private fun checkPermissions() {
-        val permissions = arrayOf(
+        val permissions = mutableListOf(
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.VIBRATE,
+            Manifest.permission.BLUETOOTH,
+            Manifest.permission.BLUETOOTH_ADMIN,
+            Manifest.permission.RECORD_AUDIO
         )
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
+            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        }
 
         val missingPermissions = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
@@ -82,16 +125,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
-        // Main Dashboard Controls
-        binding.btnToggle.setOnClickListener {
-            if (isMonitoring) stopMonitoring() else startMonitoring()
-        }
-
         binding.btnResetMetrics.setOnClickListener {
             peakGForce = 1.0f
             binding.tvPeakG.text = String.format(Locale.US, "Peak: %.2f", peakGForce)
             Toast.makeText(this, "Analytics Reset", Toast.LENGTH_SHORT).show()
-            Log.d("MainActivity", "Metrics reset by user")
         }
 
         binding.btnEditProfile.setOnClickListener {
@@ -99,29 +136,84 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.btnLogout.setOnClickListener {
-            Log.d("MainActivity", "User logging out")
             authManager.logout()
-            startActivity(Intent(this, LoginActivity::class.java))
+            val stopIntent = Intent(this, MonitoringService::class.java)
+            stopService(stopIntent)
+            val loginIntent = Intent(this, LoginActivity::class.java)
+            loginIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            startActivity(loginIntent)
             finish()
         }
 
-        // Countdown Controls
         binding.includeCountdown.btnCancelAlert.setOnClickListener {
-            cancelEmergencyCountdown()
+            val stopIntent = Intent(this, MonitoringService::class.java)
+            stopService(stopIntent)
+            startMonitoringService() // Restart for fresh state
+            hideOverlay()
+            binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
+            Toast.makeText(this, "Emergency Alert Cancelled", Toast.LENGTH_SHORT).show()
         }
 
-        // Post-Alert Controls
         binding.includeEmergencyActive.btnImSafe.setOnClickListener {
             confirmUserSafe()
         }
 
-        // Profile Editor Controls
         binding.includeProfileEditor.btnSaveProfile.setOnClickListener {
             saveProfileData()
         }
         binding.includeProfileEditor.btnCancelProfile.setOnClickListener {
             hideOverlay()
         }
+
+        binding.btnSimulateAccident.setOnClickListener {
+            Log.d("MainActivity", "Simulate Accident button clicked.")
+            Toast.makeText(this, "🚨 Simulation: Accident Detected!", Toast.LENGTH_SHORT).show()
+            val simIntent = Intent(this, MonitoringService::class.java).apply {
+                putExtra("ACTION", "SIMULATE_ACCIDENT")
+            }
+            startService(simIntent)
+        }
+    }
+
+    private fun updateSensorUI(accel: FloatArray, gForce: Float) {
+        binding.tvAccX.text = String.format(Locale.US, "X: %.2f", accel[0])
+        binding.tvAccY.text = String.format(Locale.US, "Y: %.2f", accel[1])
+        binding.tvAccZ.text = String.format(Locale.US, "Z: %.2f", accel[2])
+        binding.tvGValue.text = String.format(Locale.US, "%.2f G", gForce)
+
+        if (gForce > peakGForce) {
+            peakGForce = gForce
+            binding.tvPeakG.text = String.format(Locale.US, "Peak: %.2f", peakGForce)
+        }
+    }
+
+    private fun updateVitalsUI(hr: Int, spo2: Int, bp: String) {
+        binding.tvHeartRate.text = hr.toString()
+        binding.tvSpo2.text = "$spo2%"
+        binding.tvBp.text = bp
+    }
+
+    private fun updateBleUI(connected: Boolean, name: String?) {
+        if (connected) {
+            binding.tvWatchName.text = "Connected: ${name ?: "Watch"}"
+            binding.tvWatchStatus.text = "Watch Linked [56:75:DE:1D:5C:2B]"
+            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
+            binding.layoutWatchDetails.visibility = View.VISIBLE
+            binding.tvVitalsLabel.visibility = View.VISIBLE
+            binding.gridVitals.visibility = View.VISIBLE
+        } else {
+            binding.tvWatchName.text = "Watch Not Connected"
+            binding.tvWatchStatus.text = "Searching for FB BGS003..."
+            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_crash)
+            binding.layoutWatchDetails.visibility = View.GONE
+            binding.tvVitalsLabel.visibility = View.GONE
+            binding.gridVitals.visibility = View.GONE
+        }
+    }
+
+    private fun updateRssiUI(rssi: Int, distance: Double) {
+        binding.tvRssi.text = "$rssi dBm"
+        binding.tvDistance.text = String.format(Locale.US, "%.1f meters", distance)
     }
 
     private fun showOverlay(view: View) {
@@ -129,7 +221,6 @@ class MainActivity : AppCompatActivity() {
         binding.includeCountdown.root.visibility = View.GONE
         binding.includeEmergencyActive.root.visibility = View.GONE
         binding.includeProfileEditor.root.visibility = View.GONE
-        
         view.visibility = View.VISIBLE
     }
 
@@ -140,23 +231,34 @@ class MainActivity : AppCompatActivity() {
     private fun loadProfileData() {
         val profile = profileManager.getProfile()
         val contacts = profileManager.getContacts()
-
-        binding.tvGreeting.text = getString(R.string.greeting_format, profile["name"])
+        val name = profile["name"] ?: "User"
+        binding.tvGreeting.text = "Hello, $name"
         
         if (contacts.isNotEmpty()) {
-            binding.tvContactInfo.text = "Primary: ${contacts[0].first} (${contacts[0].second})"
+            val contactList = contacts.joinToString("\n") { "• ${it.name}: ${it.phone} (${it.relationship})" }
+            binding.tvContactInfo.text = contactList
         } else {
-            binding.tvContactInfo.text = getString(R.string.no_contacts)
+            binding.tvContactInfo.text = "No emergency contacts found."
         }
 
-        // Pre-fill editor
-        binding.includeProfileEditor.etName.setText(profile["name"])
+        binding.includeProfileEditor.etName.setText(name)
         binding.includeProfileEditor.etBlood.setText(profile["bloodGroup"])
         binding.includeProfileEditor.etAllergies.setText(profile["allergies"])
         
-        if (contacts.isNotEmpty()) {
-            binding.includeProfileEditor.etContactName.setText(contacts[0].first)
-            binding.includeProfileEditor.etContactPhone.setText(contacts[0].second)
+        val contactFields = listOf(
+            Triple(binding.includeProfileEditor.etContactName1, binding.includeProfileEditor.etContactPhone1, binding.includeProfileEditor.etContactRel1),
+            Triple(binding.includeProfileEditor.etContactName2, binding.includeProfileEditor.etContactPhone2, binding.includeProfileEditor.etContactRel2),
+            Triple(binding.includeProfileEditor.etContactName3, binding.includeProfileEditor.etContactPhone3, binding.includeProfileEditor.etContactRel3),
+            Triple(binding.includeProfileEditor.etContactName4, binding.includeProfileEditor.etContactPhone4, binding.includeProfileEditor.etContactRel4),
+            Triple(binding.includeProfileEditor.etContactName5, binding.includeProfileEditor.etContactPhone5, binding.includeProfileEditor.etContactRel5)
+        )
+
+        contacts.forEachIndexed { index, contact ->
+            if (index < contactFields.size) {
+                contactFields[index].first.setText(contact.name)
+                contactFields[index].second.setText(contact.phone)
+                contactFields[index].third.setText(contact.relationship)
+            }
         }
     }
 
@@ -164,185 +266,71 @@ class MainActivity : AppCompatActivity() {
         val name = binding.includeProfileEditor.etName.text.toString().trim()
         val blood = binding.includeProfileEditor.etBlood.text.toString().trim()
         val allergies = binding.includeProfileEditor.etAllergies.text.toString().trim()
-        val cName = binding.includeProfileEditor.etContactName.text.toString().trim()
-        val cPhone = binding.includeProfileEditor.etContactPhone.text.toString().trim()
 
-        if (name.isEmpty() || cPhone.isEmpty()) {
-            Toast.makeText(this, "Name and Contact Phone are required", Toast.LENGTH_SHORT).show()
+        if (name.isEmpty()) {
+            Toast.makeText(this, "Name is required", Toast.LENGTH_SHORT).show()
             return
         }
 
-        profileManager.saveProfile(name, blood, allergies)
-        profileManager.saveContacts(listOf(cName to cPhone))
+        val contacts = mutableListOf<ProfileManager.Contact>()
+        val contactFields = listOf(
+            Triple(binding.includeProfileEditor.etContactName1, binding.includeProfileEditor.etContactPhone1, binding.includeProfileEditor.etContactRel1),
+            Triple(binding.includeProfileEditor.etContactName2, binding.includeProfileEditor.etContactPhone2, binding.includeProfileEditor.etContactRel2),
+            Triple(binding.includeProfileEditor.etContactName3, binding.includeProfileEditor.etContactPhone3, binding.includeProfileEditor.etContactRel3),
+            Triple(binding.includeProfileEditor.etContactName4, binding.includeProfileEditor.etContactPhone4, binding.includeProfileEditor.etContactRel4),
+            Triple(binding.includeProfileEditor.etContactName5, binding.includeProfileEditor.etContactPhone5, binding.includeProfileEditor.etContactRel5)
+        )
+
+        contactFields.forEach { fields ->
+            val cName = fields.first.text.toString().trim()
+            val cPhone = fields.second.text.toString().trim()
+            val cRel = fields.third.text.toString().trim()
+            if (cName.isNotEmpty() && cPhone.isNotEmpty()) {
+                contacts.add(ProfileManager.Contact(cName, cPhone, cRel))
+            }
+        }
+
+        val email = profileManager.getProfile()["email"] ?: ""
+        profileManager.saveProfile(name, email, blood, allergies)
+        profileManager.saveContacts(contacts)
         
         loadProfileData()
         hideOverlay()
-        Toast.makeText(this, "Profile Saved Successfully", Toast.LENGTH_SHORT).show()
-        Log.d("MainActivity", "Profile updated for: $name")
-    }
-
-    private fun startMonitoring() {
-        if (isEmergencyMode) return
-        isMonitoring = true
-        sensorHelper.start()
-        refreshLocation()
-        binding.btnToggle.text = getString(R.string.btn_stop)
-        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
-        binding.tvSystemStatus.text = "Monitoring Active"
-        binding.tvStatusDesc.text = getString(R.string.monitoring_desc)
-        Log.d("MainActivity", "Monitoring STARTED")
-    }
-
-    private fun stopMonitoring() {
-        isMonitoring = false
-        sensorHelper.stop()
-        binding.btnToggle.text = getString(R.string.btn_start)
-        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
-        binding.tvSystemStatus.text = getString(R.string.system_ready)
-        binding.tvStatusDesc.text = getString(R.string.idle_desc)
-        Log.d("MainActivity", "Monitoring STOPPED")
-    }
-
-    private fun setupSensorListeners() {
-        sensorHelper.setListeners(
-            onUpdate = { accel, _, gForce, _ ->
-                runOnUiThread {
-                    binding.tvAccX.text = String.format(Locale.US, "X: %.2f", accel[0])
-                    binding.tvAccY.text = String.format(Locale.US, "Y: %.2f", accel[1])
-                    binding.tvAccZ.text = String.format(Locale.US, "Z: %.2f", accel[2])
-                    binding.tvGValue.text = String.format(Locale.US, "%.2f G", gForce)
-
-                    if (gForce > peakGForce) {
-                        peakGForce = gForce
-                        binding.tvPeakG.text = String.format(Locale.US, "Peak: %.2f", peakGForce)
-                    }
-                }
-            },
-            onCrash = {
-                runOnUiThread {
-                    startEmergencyCountdown()
-                }
-            }
-        )
-    }
-
-    private fun refreshLocation() {
-        locationHelper.fetchLastLocation { location ->
-            runOnUiThread {
-                lastLocation = location
-                if (location != null) {
-                    binding.tvLocationCoords.text = String.format(
-                        Locale.US, "Lat: %.5f, Long: %.5f",
-                        location.latitude, location.longitude
-                    )
-                    Log.d("MainActivity", "Location updated: ${location.latitude}, ${location.longitude}")
-                }
-            }
-        }
-    }
-
-    private fun startEmergencyCountdown() {
-        if (isEmergencyMode) return
-        Log.w("MainActivity", "CRASH DETECTED! Starting countdown.")
-        showOverlay(binding.includeCountdown.root)
-        binding.tvSystemStatus.text = getString(R.string.impact_detected)
-        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_crash)
-        countdownManager.start()
-        refreshLocation() 
-    }
-
-    private fun cancelEmergencyCountdown() {
-        Log.d("MainActivity", "Emergency countdown cancelled by user.")
-        countdownManager.stop()
-        sensorHelper.resetImpactState()
-        hideOverlay()
-        binding.tvSystemStatus.text = "Monitoring Resumed"
-        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
-    }
-
-    private fun executeEmergencyProtocol() {
-        Log.e("MainActivity", "Countdown finished. EXECUTING EMERGENCY PROTOCOL.")
-        isEmergencyMode = true
-        isMonitoring = false
-        sensorHelper.stop()
-        
-        showOverlay(binding.includeEmergencyActive.root)
-        
-        val profile = profileManager.getProfile()
-        val contacts = profileManager.getContacts()
-        val name = profile["name"] ?: "Unknown User"
-        
-        val mapsLink = lastLocation?.let { locationHelper.getGoogleMapsLink(it) } ?: "⚠️ Location unavailable"
-        
-        val message = """
-            🚨 CRADET EMERGENCY ALERT 🚨
-            Possible accident detected for $name.
-            
-            ❤️ MEDICAL INFO:
-            Blood Group: ${profile["bloodGroup"]}
-            Allergies: ${profile["allergies"]}
-            
-            📍 LIVE LOCATION:
-            $mapsLink
-            
-            Immediate assistance may be required.
-        """.trimIndent()
-
-        Log.d("MainActivity", "Sending emergency SMS...")
-        smsHelper.broadcastEmergency(contacts, message)
-        Toast.makeText(this, "EMERGENCY ALERT SENT!", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Profile Saved", Toast.LENGTH_SHORT).show()
     }
 
     private fun confirmUserSafe() {
-        Log.d("MainActivity", "User confirmed SAFE.")
-        val profile = profileManager.getProfile()
-        val contacts = profileManager.getContacts()
-        val name = profile["name"] ?: "User"
+        val intent = Intent(this, MonitoringService::class.java)
+        intent.putExtra("ACTION", "CONFIRM_SAFE")
+        startService(intent)
         
-        val safeMessage = """
-            ✅ UPDATE:
-            $name is SAFE.
-            
-            Previous accident alert can be ignored.
-        """.trimIndent()
-        
-        Log.d("MainActivity", "Sending safety confirmation SMS...")
-        smsHelper.broadcastEmergency(contacts, safeMessage)
-        
-        isEmergencyMode = false
         hideOverlay()
-        stopMonitoring()
-        Toast.makeText(this, "Safety confirmed. Contacts notified.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Safe confirmation sent to contacts", Toast.LENGTH_LONG).show()
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
     }
 
-    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == PERMISSION_REQUEST_CODE) {
-            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
-                Log.d("MainActivity", "All permissions granted")
-                Toast.makeText(this, "Permissions Granted", Toast.LENGTH_SHORT).show()
-            } else {
-                Log.e("MainActivity", "Permissions denied")
-                Toast.makeText(this, "Permissions Denied. Emergency features will not work.", Toast.LENGTH_LONG).show()
-            }
+    override fun onStart() {
+        super.onStart()
+        val filter = IntentFilter().apply {
+            addAction("SENSOR_UPDATE")
+            addAction("BLE_CONNECTION_UPDATE")
+            addAction("BLE_RSSI_UPDATE")
+            addAction("METRICS_UPDATE")
+            addAction("VOICE_DETECTION")
+            addAction("COUNTDOWN_TICK")
+            addAction("EMERGENCY_START")
+            addAction("EMERGENCY_EXECUTED")
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(receiver, filter)
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        Log.d("MainActivity", "onResume")
-        if (isMonitoring && !isEmergencyMode) sensorHelper.start()
-    }
-
-    override fun onPause() {
-        super.onPause()
-        Log.d("MainActivity", "onPause")
-        sensorHelper.stop()
-    }
-
-    override fun onDestroy() {
-        super.onDestroy()
-        Log.d("MainActivity", "onDestroy")
-        countdownManager.release()
+    override fun onStop() {
+        super.onStop()
+        unregisterReceiver(receiver)
     }
 }
+

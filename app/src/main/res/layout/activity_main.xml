@@ -70,9 +70,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="12dp"
-                android:text="System Ready"
-                android:textColor="@color/text_main"
-                android:textSize="18sp"
+                android:text="Monitoring Active"
+                android:textColor="@color/black"
+                android:textSize="20sp"
                 android:textStyle="bold"
                 app:layout_constraintStart_toEndOf="@id/indicatorDot"
                 app:layout_constraintTop_toTopOf="parent" />
@@ -82,22 +82,12 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
-                android:text="Monitoring is currently inactive. Press Start to begin."
+                android:text="System is automatically protecting you. Stay safe!"
                 android:textColor="@color/text_secondary"
-                android:textSize="13sp"
+                android:textSize="14sp"
                 app:layout_constraintEnd_toEndOf="parent"
                 app:layout_constraintStart_toStartOf="@id/tvSystemStatus"
                 app:layout_constraintTop_toBottomOf="@id/tvSystemStatus" />
-
-            <com.google.android.material.button.MaterialButton
-                android:id="@+id/btnToggle"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="20dp"
-                android:text="START MONITORING"
-                android:textStyle="bold"
-                app:cornerRadius="16dp"
-                app:layout_constraintTop_toBottomOf="@id/tvStatusDesc" />
 
         </androidx.constraintlayout.widget.ConstraintLayout>
     </com.google.android.material.card.MaterialCardView>
@@ -119,9 +109,10 @@
                 android:id="@+id/tvMetricsLabel"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Live Sensor Data"
-                android:textColor="@color/text_main"
+                android:text="REAL-TIME SENSORS"
+                android:textColor="@color/black"
                 android:textStyle="bold"
+                android:letterSpacing="0.1"
                 app:layout_constraintStart_toStartOf="parent"
                 app:layout_constraintTop_toTopOf="parent" />
 
@@ -138,18 +129,19 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_columnWeight="1"
-                    android:layout_marginEnd="6dp"
-                    android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
+                    android:layout_marginEnd="8dp"
+                    android:layout_marginBottom="16dp"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="@color/white">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
                         android:padding="16dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="G-Force" android:textSize="12sp" android:textColor="@color/text_secondary"/>
-                        <TextView android:id="@+id/tvGValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1.00 G" android:textSize="24sp" android:textStyle="bold" android:textColor="@color/primary"/>
-                        <TextView android:id="@+id/tvPeakG" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Peak: 1.00" android:textSize="11sp"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Impact G" android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvGValue" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="1.00 G" android:textSize="28sp" android:textStyle="bold" android:textColor="@color/primary"/>
+                        <TextView android:id="@+id/tvPeakG" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Peak: 1.00" android:textSize="12sp" android:textColor="@color/text_main"/>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
@@ -158,33 +150,47 @@
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_columnWeight="1"
-                    android:layout_marginStart="6dp"
-                    android:layout_marginBottom="12dp"
-                    app:cardCornerRadius="16dp"
-                    app:cardElevation="2dp">
+                    android:layout_marginStart="8dp"
+                    android:layout_marginBottom="16dp"
+                    app:cardCornerRadius="20dp"
+                    app:cardElevation="4dp"
+                    app:cardBackgroundColor="@color/white">
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:orientation="vertical"
                         android:padding="16dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Accelerometer" android:textSize="12sp" android:textColor="@color/text_secondary"/>
-                        <TextView android:id="@+id/tvAccX" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X: 0.0" android:textSize="12sp" android:fontFamily="monospace"/>
-                        <TextView android:id="@+id/tvAccY" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y: 0.0" android:textSize="12sp" android:fontFamily="monospace"/>
-                        <TextView android:id="@+id/tvAccZ" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: 9.8" android:textSize="12sp" android:fontFamily="monospace"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Motion Detail" android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvAccX" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="X: 0.0" android:textSize="13sp" android:textColor="@color/black" android:fontFamily="monospace"/>
+                        <TextView android:id="@+id/tvAccY" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Y: 0.0" android:textSize="13sp" android:textColor="@color/black" android:fontFamily="monospace"/>
+                        <TextView android:id="@+id/tvAccZ" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Z: 9.8" android:textSize="13sp" android:textColor="@color/black" android:fontFamily="monospace"/>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
             </GridLayout>
 
-            <!-- Location Section -->
+            <!-- Voice Detection Section -->
+            <TextView
+                android:id="@+id/tvVoiceLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/voice_detection_label"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/gridMetrics" />
+
             <com.google.android.material.card.MaterialCardView
-                android:id="@+id/cardLocation"
+                android:id="@+id/cardVoice"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
-                app:layout_constraintTop_toBottomOf="@id/gridMetrics">
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="@color/white"
+                app:layout_constraintTop_toBottomOf="@id/tvVoiceLabel">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
@@ -194,19 +200,267 @@
                     <ImageView
                         android:layout_width="32dp"
                         android:layout_height="32dp"
-                        android:src="@android:drawable/ic_menu_mylocation"
+                        android:src="@android:drawable/ic_btn_speak_now"
                         app:tint="@color/primary"/>
                     <LinearLayout
-                        android:layout_width="0dp"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_weight="1"
                         android:orientation="vertical"
                         android:layout_marginStart="16dp">
-                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Live Location Sharing" android:textStyle="bold" android:textColor="@color/text_main"/>
-                        <TextView android:id="@+id/tvLocationCoords" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Searching for GPS..." android:textSize="12sp" android:textColor="@color/text_secondary"/>
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/phrase_captured"
+                            android:textSize="12sp"
+                            android:textColor="@color/text_secondary"/>
+                        <TextView
+                            android:id="@+id/tvVoiceStatus"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="@string/listening_help"
+                            android:textSize="16sp"
+                            android:textStyle="bold"
+                            android:textColor="@color/black"/>
                     </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
+
+            <!-- Bluetooth & Smartwatch Section -->
+            <TextView
+                android:id="@+id/tvWatchLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/watch_status_label"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/cardVoice" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardWatch"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="4dp"
+                app:cardBackgroundColor="@color/white"
+                app:layout_constraintTop_toBottomOf="@id/tvWatchLabel">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:gravity="center_vertical">
+                        <ImageView
+                            android:id="@+id/ivWatchIcon"
+                            android:layout_width="40dp"
+                            android:layout_height="40dp"
+                            android:src="@android:drawable/stat_sys_data_bluetooth"
+                            app:tint="@color/text_secondary"/>
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical"
+                            android:layout_marginStart="16dp">
+                            <TextView
+                                android:id="@+id/tvWatchName"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Searching for Watch..."
+                                android:textSize="18sp"
+                                android:textStyle="bold"
+                                android:textColor="@color/black"/>
+                            <TextView
+                                android:id="@+id/tvWatchStatus"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="Automatic connection in progress"
+                                android:textSize="13sp"
+                                android:textColor="@color/text_secondary"/>
+                        </LinearLayout>
+                    </LinearLayout>
+
+                    <LinearLayout
+                        android:id="@+id/layoutWatchDetails"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="horizontal"
+                        android:layout_marginTop="16dp"
+                        android:visibility="gone"
+                        tools:visibility="visible">
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/rssi_label" android:textSize="11sp" android:textStyle="bold"/>
+                            <TextView android:id="@+id/tvRssi" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="- dBm" android:textSize="16sp" android:textStyle="bold" android:textColor="@color/primary"/>
+                        </LinearLayout>
+                        <LinearLayout
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/distance_label" android:textSize="11sp" android:textStyle="bold"/>
+                            <TextView android:id="@+id/tvDistance" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Calculating..." android:textSize="16sp" android:textStyle="bold" android:textColor="@color/primary"/>
+                        </LinearLayout>
+                    </LinearLayout>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Simulation Panel Section -->
+            <TextView
+                android:id="@+id/tvSimLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/simulation_panel_label"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/cardWatch" />
+
+            <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardSimulation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="6dp"
+                app:cardBackgroundColor="@color/white"
+                app:layout_constraintTop_toBottomOf="@id/tvSimLabel">
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:padding="20dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Demo Mode Active"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold"
+                        android:textSize="14sp"/>
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Test the emergency workflow instantly without physical movement."
+                        android:textColor="@color/text_secondary"
+                        android:textSize="12sp"
+                        android:layout_marginTop="4dp"/>
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSimulateAccident"
+                        android:layout_width="match_parent"
+                        android:layout_height="64dp"
+                        android:layout_marginTop="16dp"
+                        android:text="🚨 SIMULATE ACCIDENT"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        app:cornerRadius="16dp"
+                        app:backgroundTint="#EF4444"
+                        app:rippleColor="@color/white"/>
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <!-- Health Vitals Section -->
+            <TextView
+                android:id="@+id/tvVitalsLabel"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/vitals_label"
+                android:textColor="@color/black"
+                android:textStyle="bold"
+                android:letterSpacing="0.1"
+                android:visibility="gone"
+                tools:visibility="visible"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/cardSimulation" />
+
+            <GridLayout
+                android:id="@+id/gridVitals"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:columnCount="3"
+                android:visibility="gone"
+                tools:visibility="visible"
+                app:layout_constraintTop_toBottomOf="@id/tvVitalsLabel">
+
+                <!-- Heart Rate -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_marginEnd="4dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="@color/white">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="12dp"
+                        android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="HR" android:textSize="11sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvHeartRate" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--" android:textSize="22sp" android:textStyle="bold" android:textColor="#EF4444"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="BPM" android:textSize="10sp" android:textColor="@color/text_secondary"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- SpO2 -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_marginHorizontal="2dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="@color/white">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="12dp"
+                        android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="SpO2" android:textSize="11sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvSpo2" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--%" android:textSize="22sp" android:textStyle="bold" android:textColor="#3B82F6"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="OXYGEN" android:textSize="10sp" android:textColor="@color/text_secondary"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+                <!-- BP -->
+                <com.google.android.material.card.MaterialCardView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_columnWeight="1"
+                    android:layout_marginStart="4dp"
+                    app:cardCornerRadius="16dp"
+                    app:cardElevation="2dp"
+                    app:cardBackgroundColor="@color/white">
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:padding="12dp"
+                        android:gravity="center">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="BP" android:textSize="11sp" android:textColor="@color/text_secondary"/>
+                        <TextView android:id="@+id/tvBp" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="--/--" android:textSize="18sp" android:textStyle="bold" android:textColor="#10B981"/>
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="mmHg" android:textSize="10sp" android:textColor="@color/text_secondary"/>
+                    </LinearLayout>
+                </com.google.android.material.card.MaterialCardView>
+
+            </GridLayout>
 
             <!-- Emergency Contacts -->
             <TextView
@@ -214,38 +468,45 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
-                android:text="Emergency Contacts"
-                android:textColor="@color/text_main"
+                android:text="EMERGENCY CONTACTS"
+                android:textColor="@color/black"
                 android:textStyle="bold"
+                android:letterSpacing="0.1"
                 app:layout_constraintStart_toStartOf="parent"
-                app:layout_constraintTop_toBottomOf="@id/cardLocation" />
+                app:layout_constraintTop_toBottomOf="@id/gridVitals" />
 
             <com.google.android.material.card.MaterialCardView
                 android:id="@+id/cardContacts"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="2dp"
+                app:cardCornerRadius="20dp"
+                app:cardElevation="6dp"
+                app:cardBackgroundColor="@color/white"
                 app:layout_constraintTop_toBottomOf="@id/tvContactsLabel">
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
-                    android:padding="16dp">
+                    android:padding="20dp">
                     <TextView
                         android:id="@+id/tvContactInfo"
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:text="No contacts added yet."
-                        android:textColor="@color/text_secondary"/>
+                        android:text="No contacts configured. Tap below to add."
+                        android:textColor="@color/black"
+                        android:textSize="15sp"
+                        android:lineSpacingExtra="4dp"/>
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/btnEditProfile"
                         style="@style/Widget.MaterialComponents.Button.TextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:text="Update Contacts"
-                        android:layout_gravity="end"/>
+                        android:text="MANAGE CONTACTS"
+                        android:textColor="@color/primary"
+                        android:textStyle="bold"
+                        android:layout_gravity="end"
+                        android:layout_marginTop="8dp"/>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -254,8 +515,11 @@
                 style="@style/Widget.MaterialComponents.Button.OutlinedButton"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="24dp"
-                android:text="RESET ANALYTICS"
+                android:layout_marginTop="32dp"
+                android:layout_marginBottom="32dp"
+                android:text="RESET PEAK ANALYTICS"
+                android:textColor="@color/primary"
+                app:strokeColor="@color/primary"
                 app:cornerRadius="16dp"
                 app:layout_constraintTop_toBottomOf="@id/cardContacts" />
 
