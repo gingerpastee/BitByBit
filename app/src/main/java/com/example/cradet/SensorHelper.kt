@@ -7,66 +7,79 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import kotlin.math.sqrt
 
 /**
- * SensorHelper: Manages accelerometer and gyroscope sensor data, 
- * calculates G-force, and detects potential accidents.
+ * SensorHelper: Manages multi-sensor data with adaptive fallback logic.
+ * Implements smart crash detection by combining G-force spikes and post-impact inactivity.
  */
 class SensorHelper(context: Context) : SensorEventListener {
 
     private val sensorManager = context.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    
+    // Primary Sensors
     private val accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
     private val gyroscope = sensorManager.getDefaultSensor(Sensor.TYPE_GYROSCOPE)
+    
+    // Callbacks
+    private var onDataUpdate: ((accel: FloatArray, gyro: FloatArray, gForce: Float, status: String) -> Unit)? = null
+    private var onPotentialCrash: (() -> Unit)? = null
 
-    private var onSensorDataChanged: ((accel: FloatArray, gyro: FloatArray, gForce: Float) -> Unit)? = null
-    private var onCrashDetected: (() -> Unit)? = null
-    private var onHighGDetected: ((gForce: Float) -> Unit)? = null
-
+    // State
     private var lastAccel = FloatArray(3)
     private var lastGyro = FloatArray(3)
     private var currentGForce = 1.0f
-    
-    // Thresholds
-    private val G_THRESHOLD = 3.5f // 3.5G for impact detection
-    private val GYRO_STABILITY_THRESHOLD = 0.5f // Rotation below this is considered "still"
-    private val ACCEL_STABILITY_THRESHOLD = 1.2f // G-Force near 1.0 is considered "still"
-    
+    private var isMonitoring = false
     private var impactDetected = false
+    
+    // Detection Constants
+    private val IMPACT_G_THRESHOLD = 3.5f       // Trigger impact state above 3.5G
+    private val STILLNESS_G_THRESHOLD = 1.2f    // Back to near 1G means still
+    private val STILLNESS_GYRO_THRESHOLD = 0.5f // Low rotation means still
+    private val INACTIVITY_DELAY = 2500L        // Wait 2.5s to confirm inactivity
+
     private val handler = Handler(Looper.getMainLooper())
 
-    var isMonitoring = false
-        private set
+    fun setListeners(
+        onUpdate: (FloatArray, FloatArray, Float, String) -> Unit,
+        onCrash: () -> Unit
+    ) {
+        this.onDataUpdate = onUpdate
+        this.onPotentialCrash = onCrash
+    }
+
+    fun getSensorStatus(): String {
+        return when {
+            accelerometer != null && gyroscope != null -> "Full Monitoring Active"
+            accelerometer != null -> "Gyroscope Unavailable - Fallback Mode"
+            else -> "No compatible sensors found"
+        }
+    }
 
     fun hasGyroscope(): Boolean = gyroscope != null
 
-    fun setListeners(
-        onDataChanged: (accel: FloatArray, gyro: FloatArray, gForce: Float) -> Unit,
-        onCrash: () -> Unit,
-        onHighG: (Float) -> Unit
-    ) {
-        this.onSensorDataChanged = onDataChanged
-        this.onCrashDetected = onCrash
-        this.onHighGDetected = onHighG
+    fun start() {
+        if (isMonitoring) return
+        
+        accelerometer?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+        gyroscope?.let {
+            sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+        
+        isMonitoring = true
+        impactDetected = false
+        Log.d("SensorHelper", "Monitoring started. Status: ${getSensorStatus()}")
     }
 
-    fun startMonitoring() {
-        if (!isMonitoring) {
-            sensorManager.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_UI)
-            gyroscope?.let {
-                sensorManager.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
-            }
-            isMonitoring = true
-            impactDetected = false
-        }
-    }
-
-    fun stopMonitoring() {
-        if (isMonitoring) {
-            sensorManager.unregisterListener(this)
-            isMonitoring = false
-            handler.removeCallbacksAndMessages(null)
-        }
+    fun stop() {
+        if (!isMonitoring) return
+        sensorManager.unregisterListener(this)
+        isMonitoring = false
+        handler.removeCallbacksAndMessages(null)
+        Log.d("SensorHelper", "Monitoring stopped")
     }
 
     override fun onSensorChanged(event: SensorEvent?) {
@@ -75,12 +88,9 @@ class SensorHelper(context: Context) : SensorEventListener {
         when (event.sensor.type) {
             Sensor.TYPE_ACCELEROMETER -> {
                 lastAccel = event.values.clone()
-                // G-force Calculation: sqrt(x^2 + y^2 + z^2) / 9.81
-                val magnitude = sqrt(lastAccel[0] * lastAccel[0] + 
-                                     lastAccel[1] * lastAccel[1] + 
-                                     lastAccel[2] * lastAccel[2])
-                currentGForce = magnitude / 9.81f
-                
+                // G-Force = Magnitude / Gravity (9.81)
+                val mag = sqrt(lastAccel[0] * lastAccel[0] + lastAccel[1] * lastAccel[1] + lastAccel[2] * lastAccel[2])
+                currentGForce = mag / 9.81f
                 checkImpact(currentGForce)
             }
             Sensor.TYPE_GYROSCOPE -> {
@@ -88,39 +98,43 @@ class SensorHelper(context: Context) : SensorEventListener {
             }
         }
 
-        onSensorDataChanged?.invoke(lastAccel, lastGyro, currentGForce)
+        onDataUpdate?.invoke(lastAccel, lastGyro, currentGForce, getSensorStatus())
     }
 
-    /**
-     * Better Crash Detection Logic:
-     * 1. Detect high G-force impact.
-     * 2. After impact, check for inactivity (phone is still) after a short delay.
-     */
     private fun checkImpact(gForce: Float) {
-        if (gForce > G_THRESHOLD && !impactDetected) {
+        if (gForce > IMPACT_G_THRESHOLD && !impactDetected) {
             impactDetected = true
-            onHighGDetected?.invoke(gForce)
+            Log.w("SensorHelper", "High G-force impact detected: $gForce G")
             
-            // Wait 2 seconds to see if there's inactivity after the impact
+            // Multi-sensor Confirmation: Wait to see if phone is inactive after impact
             handler.postDelayed({
-                verifyCrash()
-            }, 2000)
+                confirmCrash()
+            }, INACTIVITY_DELAY)
         }
     }
 
-    private fun verifyCrash() {
+    private fun confirmCrash() {
         if (!isMonitoring) return
+
+        val gyroMag = sqrt(lastGyro[0] * lastGyro[0] + lastGyro[1] * lastGyro[1] + lastGyro[2] * lastGyro[2])
         
-        // Calculate current stability
-        val gyroMagnitude = sqrt(lastGyro[0] * lastGyro[0] + lastGyro[1] * lastGyro[1] + lastGyro[2] * lastGyro[2])
-        
-        // If phone is relatively still after impact, it's likely a crash
-        if (currentGForce < ACCEL_STABILITY_THRESHOLD && gyroMagnitude < GYRO_STABILITY_THRESHOLD) {
-            onCrashDetected?.invoke()
+        // Logical Check: If current G-Force is back to normal AND rotation is low
+        // It means a massive impact happened followed by the phone not moving (unconscious/dropped)
+        val isStill = currentGForce < STILLNESS_G_THRESHOLD && 
+                      (!hasGyroscope() || gyroMag < STILLNESS_GYRO_THRESHOLD)
+
+        if (isStill) {
+            Log.e("SensorHelper", "Crash Confirmed: Post-impact inactivity detected.")
+            onPotentialCrash?.invoke()
         } else {
-            // It was just a bump or movement continued
+            Log.d("SensorHelper", "Crash Rejected: Movement detected after impact.")
             impactDetected = false
         }
+    }
+
+    fun resetImpactState() {
+        impactDetected = false
+        handler.removeCallbacksAndMessages(null)
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}

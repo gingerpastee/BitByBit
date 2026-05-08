@@ -1,3 +1,17 @@
 <resources>
     <string name="app_name">CraDet</string>
+    <string name="header_title">CraDet Safety</string>
+    <string name="status_idle">System Idle</string>
+    <string name="status_active">Active &amp; Monitoring</string>
+    <string name="status_crash">POSSIBLE CRASH DETECTED</string>
+    <string name="gforce_label">REAL-TIME G-FORCE</string>
+    <string name="peak_impact">Peak Impact: %.2f G</string>
+    <string name="btn_start">START MONITORING</string>
+    <string name="btn_stop">STOP MONITORING</string>
+    <string name="crash_detected_title">CRASH DETECTED!</string>
+    <string name="crash_detected_desc">Are you okay? Emergency services will be notified automatically.</string>
+    <string name="btn_cancel_alert">I AM OKAY (CANCEL)</string>
+    <string name="alert_sent_title">ALERT SENT!</string>
+    <string name="alert_sent_desc">Emergency services and contacts have been notified of your location.</string>
+    <string name="btn_close">CLOSE</string>
 </resources>

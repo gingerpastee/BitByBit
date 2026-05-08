@@ -1,136 +1,155 @@
 package com.example.cradet
 
 import android.os.Bundle
-import android.util.Log
+import android.view.View
 import android.widget.Toast
-import java.util.Locale
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.example.cradet.databinding.ActivityMainBinding
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
     private lateinit var sensorHelper: SensorHelper
-    private var isCrashDetected = false
+    private lateinit var countdownManager: CountdownManager
+    
+    private var isMonitoring = false
     private var peakGForce = 1.0f
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         sensorHelper = SensorHelper(this)
+        countdownManager = CountdownManager(
+            onTick = { seconds ->
+                binding.tvTimer.text = seconds.toString()
+            },
+            onFinish = {
+                triggerEmergency()
+            }
+        )
 
-        setupListeners()
-        initStatus()
+        setupUI()
+        setupSensorListeners()
     }
 
-    private fun initStatus() {
-        if (!sensorHelper.hasGyroscope()) {
-            binding.tvGyroStatus.text = "Gyroscope not available on this device"
-            binding.tvGyroStatus.setTextColor(ContextCompat.getColor(this, R.color.status_crash))
-        } else {
-            binding.tvGyroStatus.text = "Gyroscope Active"
-            binding.tvGyroStatus.setTextColor(ContextCompat.getColor(this, R.color.status_safe))
-        }
-        updateUI(isMonitoring = false)
-    }
+    private fun setupUI() {
+        binding.tvSensorStatus.text = sensorHelper.getSensorStatus()
 
-    private fun setupListeners() {
-        binding.btnStart.setOnClickListener {
-            sensorHelper.startMonitoring()
-            updateUI(isMonitoring = true)
-            Toast.makeText(this, "Monitoring Started", Toast.LENGTH_SHORT).show()
+        binding.btnToggle.setOnClickListener {
+            if (isMonitoring) {
+                stopMonitoring()
+            } else {
+                startMonitoring()
+            }
         }
 
-        binding.btnStop.setOnClickListener {
-            sensorHelper.stopMonitoring()
-            updateUI(isMonitoring = false)
-            Toast.makeText(this, "Monitoring Paused", Toast.LENGTH_SHORT).show()
-        }
-
-        binding.btnReset.setOnClickListener {
-            isCrashDetected = false
+        binding.btnResetMetrics.setOnClickListener {
             peakGForce = 1.0f
-            binding.tvPeakG.text = String.format(Locale.US, "Peak recorded: %.2f G", peakGForce)
-            binding.tvDetectionMsg.text = "No threats detected"
-            binding.tvDetectionMsg.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            binding.cardStatus.strokeWidth = 0
-            updateUI(isMonitoring = sensorHelper.isMonitoring)
-            Toast.makeText(this, "Metrics Reset", Toast.LENGTH_SHORT).show()
+            binding.tvPeakG.text = getString(R.string.peak_impact, peakGForce)
+            Toast.makeText(this, "Metrics reset", Toast.LENGTH_SHORT).show()
         }
 
-        sensorHelper.setListeners(
-            onDataChanged = { accel, gyro, gForce ->
-                runOnUiThread {
-                    // Update Accelerometer
-                    binding.tvAccelX.text = String.format(Locale.US, "X: %.2f", accel[0])
-                    binding.tvAccelY.text = String.format(Locale.US, "Y: %.2f", accel[1])
-                    binding.tvAccelZ.text = String.format(Locale.US, "Z: %.2f", accel[2])
+        binding.btnCancelAlert.setOnClickListener {
+            cancelEmergency()
+        }
+    }
 
-                    // Update Gyroscope
-                    binding.tvGyroX.text = String.format(Locale.US, "Rot X: %.2f", gyro[0])
-                    binding.tvGyroY.text = String.format(Locale.US, "Rot Y: %.2f", gyro[1])
-                    binding.tvGyroZ.text = String.format(Locale.US, "Rot Z: %.2f", gyro[2])
+    private fun startMonitoring() {
+        isMonitoring = true
+        sensorHelper.start()
+        binding.btnToggle.text = getString(R.string.btn_stop)
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
+        binding.tvSystemStatus.text = getString(R.string.status_active)
+        Toast.makeText(this, "Safety Monitoring Started", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun stopMonitoring() {
+        isMonitoring = false
+        sensorHelper.stop()
+        binding.btnToggle.text = getString(R.string.btn_start)
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
+        binding.tvSystemStatus.text = getString(R.string.status_idle)
+    }
+
+    private fun setupSensorListeners() {
+        sensorHelper.setListeners(
+            onUpdate = { accel, gyro, gForce, _ ->
+                runOnUiThread {
+                    // Update raw values
+                    binding.tvAccX.text = String.format(Locale.US, "X: %.2f", accel[0])
+                    binding.tvAccY.text = String.format(Locale.US, "Y: %.2f", accel[1])
+                    binding.tvAccZ.text = String.format(Locale.US, "Z: %.2f", accel[2])
+
+                    binding.tvGyroX.text = String.format(Locale.US, "X: %.2f", gyro[0])
+                    binding.tvGyroY.text = String.format(Locale.US, "Y: %.2f", gyro[1])
+                    binding.tvGyroZ.text = String.format(Locale.US, "Z: %.2f", gyro[2])
 
                     // Update G-Force
-                    binding.tvCurrentG.text = String.format(Locale.US, "%.2f", gForce)
+                    binding.tvGValue.text = String.format(Locale.US, "%.2f G", gForce)
                     if (gForce > peakGForce) {
                         peakGForce = gForce
-                        binding.tvPeakG.text = String.format(Locale.US, "Peak recorded: %.2f G", peakGForce)
+                        binding.tvPeakG.text = getString(R.string.peak_impact, peakGForce)
                     }
                 }
             },
             onCrash = {
-                if (!isCrashDetected) {
-                    isCrashDetected = true
-                    runOnUiThread {
-                        handleCrash()
-                    }
-                }
-            },
-            onHighG = { gValue ->
                 runOnUiThread {
-                    Log.w("CraDet", "High G-force detected: $gValue")
-                    Toast.makeText(this, "High G detected: ${String.format("%.1f", gValue)}G", Toast.LENGTH_SHORT).show()
+                    startEmergencyCountdown()
                 }
             }
         )
     }
 
-    private fun handleCrash() {
-        binding.tvMonitoringStatus.text = "CRASH DETECTED"
-        binding.tvMonitoringStatus.setTextColor(ContextCompat.getColor(this, R.color.status_crash))
-        binding.tvDetectionMsg.text = "Possible Crash Detected! Stability verification failed."
-        binding.tvDetectionMsg.setTextColor(ContextCompat.getColor(this, R.color.status_crash))
+    private fun startEmergencyCountdown() {
+        // Switch to countdown UI
+        binding.layoutCountdown.visibility = View.VISIBLE
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_crash)
+        binding.tvSystemStatus.text = getString(R.string.status_crash)
         
-        binding.cardStatus.strokeColor = ContextCompat.getColor(this, R.color.status_crash)
-        binding.cardStatus.strokeWidth = 6
-
-        Toast.makeText(this, "🚨 EMERGENCY: Crash Detected!", Toast.LENGTH_LONG).show()
+        countdownManager.start()
     }
 
-    private fun updateUI(isMonitoring: Boolean) {
-        if (isCrashDetected) {
-            binding.tvMonitoringStatus.text = "CRASH RECORDED"
-            binding.tvMonitoringStatus.setTextColor(ContextCompat.getColor(this, R.color.status_crash))
-        } else if (isMonitoring) {
-            binding.tvMonitoringStatus.text = "Monitoring Active"
-            binding.tvMonitoringStatus.setTextColor(ContextCompat.getColor(this, R.color.status_monitoring))
-            binding.tvDetectionMsg.text = "Analyzing motion..."
-        } else {
-            binding.tvMonitoringStatus.text = "System Ready"
-            binding.tvMonitoringStatus.setTextColor(ContextCompat.getColor(this, R.color.status_safe))
-        }
+    private fun cancelEmergency() {
+        countdownManager.stop()
+        sensorHelper.resetImpactState()
+        binding.layoutCountdown.visibility = View.GONE
+        binding.tvSystemStatus.text = "Monitoring Resumed"
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
+        Toast.makeText(this, "Alert Cancelled. Monitoring continues.", Toast.LENGTH_SHORT).show()
+    }
 
-        binding.btnStart.isEnabled = !isMonitoring
-        binding.btnStop.isEnabled = isMonitoring
+    private fun triggerEmergency() {
+        binding.tvAlertTitle.text = getString(R.string.alert_sent_title)
+        binding.tvAlertDesc.text = getString(R.string.alert_sent_desc)
+        binding.tvTimer.text = "!!!"
+        binding.btnCancelAlert.text = getString(R.string.btn_close)
+        binding.btnCancelAlert.setOnClickListener {
+            binding.layoutCountdown.visibility = View.GONE
+            stopMonitoring()
+            // Reset UI for next time
+            binding.tvAlertTitle.text = getString(R.string.crash_detected_title)
+            binding.tvAlertDesc.text = getString(R.string.crash_detected_desc)
+            binding.btnCancelAlert.text = getString(R.string.btn_cancel_alert)
+            binding.btnCancelAlert.setOnClickListener { cancelEmergency() }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (isMonitoring) sensorHelper.start()
     }
 
     override fun onPause() {
         super.onPause()
-        sensorHelper.stopMonitoring()
+        sensorHelper.stop()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        countdownManager.release()
     }
 }
