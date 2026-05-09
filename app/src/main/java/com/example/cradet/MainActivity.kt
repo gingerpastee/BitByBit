@@ -22,49 +22,55 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private lateinit var profileManager: ProfileManager
     private lateinit var authManager: AuthManager
-    private lateinit var locationHelper: LocationHelper
 
     private var peakGForce = 1.0f
-    private val PERMISSION_REQUEST_CODE = 100
+    private val PERMISSION_REQUEST_CODE = 101
 
     private val receiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
+            Log.d("MainActivity", "Broadcast received: ${intent?.action}")
             when (intent?.action) {
                 "SENSOR_UPDATE" -> {
                     val accel = intent.getFloatArrayExtra("accel") ?: floatArrayOf(0f, 0f, 0f)
+                    val gyro = intent.getFloatArrayExtra("gyro") ?: floatArrayOf(0f, 0f, 0f)
                     val gForce = intent.getFloatExtra("gForce", 1.0f)
-                    updateSensorUI(accel, gForce)
+                    val status = intent.getStringExtra("status") ?: ""
+                    updateSensorUI(accel, gyro, gForce, status)
                 }
                 "BLE_CONNECTION_UPDATE" -> {
                     val connected = intent.getBooleanExtra("connected", false)
                     val name = intent.getStringExtra("name")
-                    updateBleUI(connected, name)
+                    updateBleStatusUI(connected, name)
                 }
-                "METRICS_UPDATE" -> {
+                "BLE_RSSI_UPDATE" -> {
                     val rssi = intent.getIntExtra("rssi", 0)
                     val distance = intent.getDoubleExtra("distance", 0.0)
+                    updateRssiUI(rssi, distance)
+                }
+                "METRICS_UPDATE" -> {
                     val hr = intent.getIntExtra("hr", 0)
                     val spo2 = intent.getIntExtra("spo2", 0)
                     val bp = intent.getStringExtra("bp") ?: "--/--"
-                    
-                    updateRssiUI(rssi, distance)
                     updateVitalsUI(hr, spo2, bp)
                 }
                 "VOICE_DETECTION" -> {
-                    val phrase = intent.getStringExtra("phrase") ?: "HELP"
-                    binding.tvVoiceStatus.text = phrase
-                    Toast.makeText(this@MainActivity, "🎤 Distress Detected: $phrase", Toast.LENGTH_LONG).show()
-                }
-                "COUNTDOWN_TICK" -> {
-                    val seconds = intent.getIntExtra("seconds", 20)
-                    binding.includeCountdown.tvTimer.text = seconds.toString()
-                }
-                "EMERGENCY_START" -> {
-                    showOverlay(binding.includeCountdown.root)
-                    binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.status_crash)
+                    val phrase = intent.getStringExtra("phrase") ?: ""
+                    if (phrase.isNotEmpty()) {
+                        binding.tvVoiceStatus.text = "🎤 HEARD: ${phrase.uppercase()}"
+                        if (phrase.uppercase().contains("HELP HELP")) {
+                            binding.tvVoiceStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.status_crash))
+                        } else {
+                            binding.tvVoiceStatus.setTextColor(ContextCompat.getColor(this@MainActivity, R.color.black))
+                        }
+                    }
                 }
                 "EMERGENCY_EXECUTED" -> {
-                    showOverlay(binding.includeEmergencyActive.root)
+                    showEmergencyActiveOverlay()
+                }
+                "EMERGENCY_CANCELLED" -> {
+                    hideOverlay()
+                    binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this@MainActivity, R.color.status_safe)
+                    binding.tvSystemStatus.text = "🟢 Monitoring Active"
                 }
             }
         }
@@ -73,30 +79,30 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         
-        // Fix for potential "BAD_DECRYPT" / "RegistryDataStore" errors
+        // Fix potential data corruption issues
         DataStoreFixer.cleanCorruptedRegistries(this)
-
+        
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
         profileManager = ProfileManager(this)
         authManager = AuthManager(this)
-        locationHelper = LocationHelper(this)
 
         checkPermissions()
         setupUI()
         loadProfileData()
+        
+        // Start monitoring automatically
         startMonitoringService()
     }
 
     private fun startMonitoringService() {
-        val serviceIntent = Intent(this, MonitoringService::class.java)
+        val intent = Intent(this, MonitoringService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(serviceIntent)
+            startForegroundService(intent)
         } else {
-            startService(serviceIntent)
+            startService(intent)
         }
-        Log.d("MainActivity", "Foreground service started for auto-monitoring")
     }
 
     private fun checkPermissions() {
@@ -104,58 +110,66 @@ class MainActivity : AppCompatActivity() {
             Manifest.permission.SEND_SMS,
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.VIBRATE,
-            Manifest.permission.BLUETOOTH,
-            Manifest.permission.BLUETOOTH_ADMIN,
-            Manifest.permission.RECORD_AUDIO
+            Manifest.permission.RECORD_AUDIO,
+            Manifest.permission.VIBRATE
         )
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            permissions.add(Manifest.permission.BLUETOOTH_SCAN)
-            permissions.add(Manifest.permission.BLUETOOTH_CONNECT)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
 
-        val missingPermissions = permissions.filter {
+        val missing = permissions.filter {
             ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
         }
 
-        if (missingPermissions.isNotEmpty()) {
-            ActivityCompat.requestPermissions(this, missingPermissions.toTypedArray(), PERMISSION_REQUEST_CODE)
+        if (missing.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, missing.toTypedArray(), PERMISSION_REQUEST_CODE)
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            val audioIndex = permissions.indexOf(Manifest.permission.RECORD_AUDIO)
+            if (audioIndex != -1 && grantResults[audioIndex] == PackageManager.PERMISSION_GRANTED) {
+                // Restart service to enable voice detection
+                startMonitoringService()
+            }
         }
     }
 
     private fun setupUI() {
-        binding.btnResetMetrics.setOnClickListener {
-            peakGForce = 1.0f
-            binding.tvPeakG.text = String.format(Locale.US, "Peak: %.2f", peakGForce)
-            Toast.makeText(this, "Analytics Reset", Toast.LENGTH_SHORT).show()
+        binding.btnSimulateAccident.setOnClickListener {
+            val intent = Intent(this, MonitoringService::class.java)
+            intent.putExtra("ACTION", "SIMULATE_ACCIDENT")
+            startService(intent)
         }
 
-        binding.btnEditProfile.setOnClickListener {
-            showOverlay(binding.includeProfileEditor.root)
+        binding.btnViewHospitals.setOnClickListener {
+            startActivity(Intent(this, NearbyHospitalsActivity::class.java))
         }
 
         binding.btnLogout.setOnClickListener {
             authManager.logout()
-            val stopIntent = Intent(this, MonitoringService::class.java)
-            stopService(stopIntent)
+            stopService(Intent(this, MonitoringService::class.java))
             val loginIntent = Intent(this, LoginActivity::class.java)
             loginIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             startActivity(loginIntent)
             finish()
         }
 
-        binding.includeCountdown.btnCancelAlert.setOnClickListener {
-            val stopIntent = Intent(this, MonitoringService::class.java)
-            stopService(stopIntent)
-            startMonitoringService() // Restart for fresh state
-            hideOverlay()
-            binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_monitoring)
-            Toast.makeText(this, "Emergency Alert Cancelled", Toast.LENGTH_SHORT).show()
+        binding.includeEmergencyActive.btnImSafe.setOnClickListener {
+            val intent = Intent(this, MonitoringService::class.java)
+            intent.putExtra("ACTION", "CONFIRM_SAFE")
+            startService(intent)
+        }
+        
+        binding.btnManageContacts.setOnClickListener {
+            showProfileEditor()
         }
 
-        binding.includeEmergencyActive.btnImSafe.setOnClickListener {
-            confirmUserSafe()
+        binding.tvGreeting.setOnLongClickListener {
+            showProfileEditor()
+            true
         }
 
         binding.includeProfileEditor.btnSaveProfile.setOnClickListener {
@@ -164,26 +178,23 @@ class MainActivity : AppCompatActivity() {
         binding.includeProfileEditor.btnCancelProfile.setOnClickListener {
             hideOverlay()
         }
-
-        binding.btnSimulateAccident.setOnClickListener {
-            Log.d("MainActivity", "Simulate Accident button clicked.")
-            Toast.makeText(this, "🚨 Simulation: Accident Detected!", Toast.LENGTH_SHORT).show()
-            val simIntent = Intent(this, MonitoringService::class.java).apply {
-                putExtra("ACTION", "SIMULATE_ACCIDENT")
-            }
-            startService(simIntent)
-        }
     }
 
-    private fun updateSensorUI(accel: FloatArray, gForce: Float) {
-        binding.tvAccX.text = String.format(Locale.US, "X: %.2f", accel[0])
-        binding.tvAccY.text = String.format(Locale.US, "Y: %.2f", accel[1])
-        binding.tvAccZ.text = String.format(Locale.US, "Z: %.2f", accel[2])
+    private fun updateSensorUI(accel: FloatArray, gyro: FloatArray, gForce: Float, status: String) {
         binding.tvGValue.text = String.format(Locale.US, "%.2f G", gForce)
-
         if (gForce > peakGForce) {
             peakGForce = gForce
             binding.tvPeakG.text = String.format(Locale.US, "Peak: %.2f", peakGForce)
+        }
+        
+        binding.tvAccelValues.text = String.format(Locale.US, "X: %.2f  Y: %.2f  Z: %.2f", accel[0], accel[1], accel[2])
+        
+        if (status.contains("Unavailable")) {
+            binding.tvGyroValues.text = "❌ Gyroscope Not Available"
+            binding.tvGyroValues.setTextColor(ContextCompat.getColor(this, R.color.status_crash))
+        } else {
+            binding.tvGyroValues.text = String.format(Locale.US, "X: %.2f  Y: %.2f  Z: %.2f", gyro[0], gyro[1], gyro[2])
+            binding.tvGyroValues.setTextColor(ContextCompat.getColor(this, R.color.black))
         }
     }
 
@@ -193,21 +204,15 @@ class MainActivity : AppCompatActivity() {
         binding.tvBp.text = bp
     }
 
-    private fun updateBleUI(connected: Boolean, name: String?) {
+    private fun updateBleStatusUI(connected: Boolean, name: String?) {
         if (connected) {
-            binding.tvWatchName.text = "Connected: ${name ?: "Watch"}"
-            binding.tvWatchStatus.text = "Watch Linked [56:75:DE:1D:5C:2B]"
-            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
-            binding.layoutWatchDetails.visibility = View.VISIBLE
-            binding.tvVitalsLabel.visibility = View.VISIBLE
-            binding.gridVitals.visibility = View.VISIBLE
+            binding.tvWatchName.text = "⌚ ${name ?: "Watch"} Connected"
+            binding.tvWatchStatus.text = "System Link Established"
+            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.primary)
         } else {
-            binding.tvWatchName.text = "Watch Not Connected"
-            binding.tvWatchStatus.text = "Searching for FB BGS003..."
-            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.status_crash)
-            binding.layoutWatchDetails.visibility = View.GONE
-            binding.tvVitalsLabel.visibility = View.GONE
-            binding.gridVitals.visibility = View.GONE
+            binding.tvWatchName.text = "Watch Disconnected"
+            binding.tvWatchStatus.text = "Searching for Link..."
+            binding.ivWatchIcon.imageTintList = ContextCompat.getColorStateList(this, R.color.text_secondary)
         }
     }
 
@@ -216,12 +221,18 @@ class MainActivity : AppCompatActivity() {
         binding.tvDistance.text = String.format(Locale.US, "%.1f meters", distance)
     }
 
-    private fun showOverlay(view: View) {
+    private fun showEmergencyActiveOverlay() {
         binding.overlayContainer.visibility = View.VISIBLE
-        binding.includeCountdown.root.visibility = View.GONE
-        binding.includeEmergencyActive.root.visibility = View.GONE
+        binding.includeEmergencyActive.root.visibility = View.VISIBLE
         binding.includeProfileEditor.root.visibility = View.GONE
-        view.visibility = View.VISIBLE
+        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_crash)
+        binding.tvSystemStatus.text = "🔴 EMERGENCY ACTIVE"
+    }
+
+    private fun showProfileEditor() {
+        binding.overlayContainer.visibility = View.VISIBLE
+        binding.includeEmergencyActive.root.visibility = View.GONE
+        binding.includeProfileEditor.root.visibility = View.VISIBLE
     }
 
     private fun hideOverlay() {
@@ -230,35 +241,38 @@ class MainActivity : AppCompatActivity() {
 
     private fun loadProfileData() {
         val profile = profileManager.getProfile()
-        val contacts = profileManager.getContacts()
         val name = profile["name"] ?: "User"
         binding.tvGreeting.text = "Hello, $name"
-        
-        if (contacts.isNotEmpty()) {
-            val contactList = contacts.joinToString("\n") { "• ${it.name}: ${it.phone} (${it.relationship})" }
-            binding.tvContactInfo.text = contactList
-        } else {
-            binding.tvContactInfo.text = "No emergency contacts found."
-        }
 
         binding.includeProfileEditor.etName.setText(name)
         binding.includeProfileEditor.etBlood.setText(profile["bloodGroup"])
         binding.includeProfileEditor.etAllergies.setText(profile["allergies"])
-        
-        val contactFields = listOf(
-            Triple(binding.includeProfileEditor.etContactName1, binding.includeProfileEditor.etContactPhone1, binding.includeProfileEditor.etContactRel1),
-            Triple(binding.includeProfileEditor.etContactName2, binding.includeProfileEditor.etContactPhone2, binding.includeProfileEditor.etContactRel2),
-            Triple(binding.includeProfileEditor.etContactName3, binding.includeProfileEditor.etContactPhone3, binding.includeProfileEditor.etContactRel3),
-            Triple(binding.includeProfileEditor.etContactName4, binding.includeProfileEditor.etContactPhone4, binding.includeProfileEditor.etContactRel4),
-            Triple(binding.includeProfileEditor.etContactName5, binding.includeProfileEditor.etContactPhone5, binding.includeProfileEditor.etContactRel5)
-        )
 
-        contacts.forEachIndexed { index, contact ->
-            if (index < contactFields.size) {
-                contactFields[index].first.setText(contact.name)
-                contactFields[index].second.setText(contact.phone)
-                contactFields[index].third.setText(contact.relationship)
-            }
+        val contacts = profileManager.getContacts()
+        if (contacts.size >= 1) {
+            binding.includeProfileEditor.etContactName1.setText(contacts[0].name)
+            binding.includeProfileEditor.etContactPhone1.setText(contacts[0].phone)
+            binding.includeProfileEditor.etContactRel1.setText(contacts[0].relationship)
+        }
+        if (contacts.size >= 2) {
+            binding.includeProfileEditor.etContactName2.setText(contacts[1].name)
+            binding.includeProfileEditor.etContactPhone2.setText(contacts[1].phone)
+            binding.includeProfileEditor.etContactRel2.setText(contacts[1].relationship)
+        }
+        if (contacts.size >= 3) {
+            binding.includeProfileEditor.etContactName3.setText(contacts[2].name)
+            binding.includeProfileEditor.etContactPhone3.setText(contacts[2].phone)
+            binding.includeProfileEditor.etContactRel3.setText(contacts[2].relationship)
+        }
+        if (contacts.size >= 4) {
+            binding.includeProfileEditor.etContactName4.setText(contacts[3].name)
+            binding.includeProfileEditor.etContactPhone4.setText(contacts[3].phone)
+            binding.includeProfileEditor.etContactRel4.setText(contacts[3].relationship)
+        }
+        if (contacts.size >= 5) {
+            binding.includeProfileEditor.etContactName5.setText(contacts[4].name)
+            binding.includeProfileEditor.etContactPhone5.setText(contacts[4].phone)
+            binding.includeProfileEditor.etContactRel5.setText(contacts[4].relationship)
         }
     }
 
@@ -268,45 +282,51 @@ class MainActivity : AppCompatActivity() {
         val allergies = binding.includeProfileEditor.etAllergies.text.toString().trim()
 
         if (name.isEmpty()) {
-            Toast.makeText(this, "Name is required", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Name required", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val contacts = mutableListOf<ProfileManager.Contact>()
-        val contactFields = listOf(
-            Triple(binding.includeProfileEditor.etContactName1, binding.includeProfileEditor.etContactPhone1, binding.includeProfileEditor.etContactRel1),
-            Triple(binding.includeProfileEditor.etContactName2, binding.includeProfileEditor.etContactPhone2, binding.includeProfileEditor.etContactRel2),
-            Triple(binding.includeProfileEditor.etContactName3, binding.includeProfileEditor.etContactPhone3, binding.includeProfileEditor.etContactRel3),
-            Triple(binding.includeProfileEditor.etContactName4, binding.includeProfileEditor.etContactPhone4, binding.includeProfileEditor.etContactRel4),
-            Triple(binding.includeProfileEditor.etContactName5, binding.includeProfileEditor.etContactPhone5, binding.includeProfileEditor.etContactRel5)
-        )
+        profileManager.saveProfile(name, profileManager.getProfile()["email"] ?: "", blood, allergies)
 
-        contactFields.forEach { fields ->
-            val cName = fields.first.text.toString().trim()
-            val cPhone = fields.second.text.toString().trim()
-            val cRel = fields.third.text.toString().trim()
-            if (cName.isNotEmpty() && cPhone.isNotEmpty()) {
-                contacts.add(ProfileManager.Contact(cName, cPhone, cRel))
+        val contacts = mutableListOf<ProfileManager.Contact>()
+        
+        fun addContact(n: String, p: String, r: String) {
+            if (n.isNotEmpty() && p.isNotEmpty()) {
+                contacts.add(ProfileManager.Contact(n, p, r))
             }
         }
 
-        val email = profileManager.getProfile()["email"] ?: ""
-        profileManager.saveProfile(name, email, blood, allergies)
+        addContact(
+            binding.includeProfileEditor.etContactName1.text.toString(),
+            binding.includeProfileEditor.etContactPhone1.text.toString(),
+            binding.includeProfileEditor.etContactRel1.text.toString()
+        )
+        addContact(
+            binding.includeProfileEditor.etContactName2.text.toString(),
+            binding.includeProfileEditor.etContactPhone2.text.toString(),
+            binding.includeProfileEditor.etContactRel2.text.toString()
+        )
+        addContact(
+            binding.includeProfileEditor.etContactName3.text.toString(),
+            binding.includeProfileEditor.etContactPhone3.text.toString(),
+            binding.includeProfileEditor.etContactRel3.text.toString()
+        )
+        addContact(
+            binding.includeProfileEditor.etContactName4.text.toString(),
+            binding.includeProfileEditor.etContactPhone4.text.toString(),
+            binding.includeProfileEditor.etContactRel4.text.toString()
+        )
+        addContact(
+            binding.includeProfileEditor.etContactName5.text.toString(),
+            binding.includeProfileEditor.etContactPhone5.text.toString(),
+            binding.includeProfileEditor.etContactRel5.text.toString()
+        )
+
         profileManager.saveContacts(contacts)
-        
+
         loadProfileData()
         hideOverlay()
-        Toast.makeText(this, "Profile Saved", Toast.LENGTH_SHORT).show()
-    }
-
-    private fun confirmUserSafe() {
-        val intent = Intent(this, MonitoringService::class.java)
-        intent.putExtra("ACTION", "CONFIRM_SAFE")
-        startService(intent)
-        
-        hideOverlay()
-        Toast.makeText(this, "Safe confirmation sent to contacts", Toast.LENGTH_LONG).show()
-        binding.indicatorDot.backgroundTintList = ContextCompat.getColorStateList(this, R.color.status_safe)
+        Toast.makeText(this, "Profile Updated", Toast.LENGTH_SHORT).show()
     }
 
     override fun onStart() {
@@ -317,12 +337,12 @@ class MainActivity : AppCompatActivity() {
             addAction("BLE_RSSI_UPDATE")
             addAction("METRICS_UPDATE")
             addAction("VOICE_DETECTION")
-            addAction("COUNTDOWN_TICK")
             addAction("EMERGENCY_START")
             addAction("EMERGENCY_EXECUTED")
+            addAction("EMERGENCY_CANCELLED")
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            registerReceiver(receiver, filter, RECEIVER_NOT_EXPORTED)
+            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(receiver, filter)
         }
@@ -333,4 +353,3 @@ class MainActivity : AppCompatActivity() {
         unregisterReceiver(receiver)
     }
 }
-

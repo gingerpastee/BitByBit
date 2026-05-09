@@ -17,7 +17,6 @@ class MonitoringService : Service() {
 
     private lateinit var sensorHelper: SensorHelper
     private lateinit var bleHelper: BleHelper
-    private lateinit var countdownManager: CountdownManager
     private lateinit var locationHelper: LocationHelper
     private lateinit var smsHelper: SmsHelper
     private lateinit var profileManager: ProfileManager
@@ -43,18 +42,6 @@ class MonitoringService : Service() {
         smsHelper = SmsHelper(this)
         profileManager = ProfileManager(this)
 
-        countdownManager = CountdownManager(
-            this,
-            onTickCallback = { seconds ->
-                val intent = Intent("COUNTDOWN_TICK")
-                intent.putExtra("seconds", seconds)
-                sendBroadcast(intent)
-            },
-            onFinishCallback = {
-                executeEmergencyProtocol()
-            }
-        )
-
         setupSensorListeners()
         setupBleListeners()
         startVoiceDetection()
@@ -63,6 +50,8 @@ class MonitoringService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val action = intent?.action ?: intent?.getStringExtra("ACTION")
+        Log.d("MonitoringService", "onStartCommand: action=$action")
+        
         when (action) {
             ACTION_STOP -> {
                 stopSelf()
@@ -73,12 +62,15 @@ class MonitoringService : Service() {
                 return START_STICKY
             }
             "SIMULATE_ACCIDENT" -> {
-                startEmergencyCountdown()
+                startEmergencyActivity()
+                return START_STICKY
+            }
+            "EXECUTE_EMERGENCY" -> {
+                executeEmergencyProtocol()
                 return START_STICKY
             }
         }
 
-        Log.d("MonitoringService", "Service Started")
         createNotificationChannel()
         val notification = createNotification()
         startForeground(NOTIFICATION_ID, notification)
@@ -93,18 +85,17 @@ class MonitoringService : Service() {
     }
 
     private fun startVoiceDetection() {
-        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
-            Log.e("MonitoringService", "Speech Recognition not available")
+        if (androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.RECORD_AUDIO) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+            Log.e("MonitoringService", "RECORD_AUDIO permission not granted. Voice detection disabled.")
             return
         }
-        
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) return
         if (isListening) return
 
         speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
         }
 
         speechRecognizer?.setRecognitionListener(object : RecognitionListener {
@@ -115,10 +106,7 @@ class MonitoringService : Service() {
             override fun onEndOfSpeech() { isListening = false }
             override fun onError(error: Int) {
                 isListening = false
-                // Restart on error if service is still running after a small delay
-                if (isRunning) {
-                    handler.postDelayed({ startVoiceDetection() }, 2000)
-                }
+                if (isRunning) handler.postDelayed({ startVoiceDetection() }, 3000)
             }
 
             override fun onResults(results: Bundle?) {
@@ -126,12 +114,18 @@ class MonitoringService : Service() {
                 val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 matches?.forEach { phrase ->
                     val upper = phrase.uppercase()
-                    if (upper.contains("HELP") || upper.contains("ACCIDENT") || upper.contains("EMERGENCY")) {
-                        Log.e("MonitoringService", "Distress Voice Detected: $phrase")
-                        val voiceIntent = Intent("VOICE_DETECTION")
-                        voiceIntent.putExtra("phrase", phrase)
-                        sendBroadcast(voiceIntent)
-                        startEmergencyCountdown()
+                    Log.d("MonitoringService", "Heard: $upper")
+                    
+                    val voiceIntent = Intent("VOICE_DETECTION").apply {
+                        `package` = packageName
+                        putExtra("phrase", phrase)
+                    }
+                    sendBroadcast(voiceIntent)
+
+                    // Trigger only if "HELP HELP" is detected (two times)
+                    if (upper.contains("HELP HELP")) {
+                        Log.e("MonitoringService", "EMERGENCY PHRASE DETECTED: $phrase")
+                        startEmergencyActivity()
                     }
                 }
                 if (isRunning) startVoiceDetection()
@@ -141,8 +135,15 @@ class MonitoringService : Service() {
                 val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
                 matches?.firstOrNull()?.let { phrase ->
                     val upper = phrase.uppercase()
-                    if (upper.contains("HELP")) {
-                         Log.e("MonitoringService", "Partial Distress Detected: $phrase")
+                    // Update dashboard in real-time
+                    val voiceIntent = Intent("VOICE_DETECTION").apply {
+                        `package` = packageName
+                        putExtra("phrase", "$phrase...")
+                    }
+                    sendBroadcast(voiceIntent)
+                    
+                    if (upper.contains("HELP HELP")) {
+                        startEmergencyActivity()
                     }
                 }
             }
@@ -160,16 +161,14 @@ class MonitoringService : Service() {
         handler.post(object : Runnable {
             override fun run() {
                 if (bleHelper.isDeviceConnected()) {
-                    val rssi = (-75..-48).random()
-                    val distance = (0.5 + (5.0 - 0.5) * Random().nextDouble())
+                    // Realistic fluctuations
                     val hr = (72..110).random()
                     val spo2 = (95..100).random()
-                    val sys = (110..130).random()
-                    val dia = (70..90).random()
+                    val sys = 110 + (hr - 72) / 2 + (0..10).random()
+                    val dia = 70 + (hr - 72) / 4 + (0..5).random()
 
                     val intent = Intent("METRICS_UPDATE").apply {
-                        putExtra("rssi", rssi)
-                        putExtra("distance", distance)
+                        `package` = packageName
                         putExtra("hr", hr)
                         putExtra("spo2", spo2)
                         putExtra("bp", "$sys/$dia")
@@ -189,20 +188,22 @@ class MonitoringService : Service() {
         
         val contactPairs = contacts.map { it.name to it.phone }
         smsHelper.broadcastEmergency(contactPairs, safeMessage)
-        
-        countdownManager.stop()
         sensorHelper.resetImpactState()
+        
+        sendBroadcast(Intent("EMERGENCY_CANCELLED").apply { `package` = packageName })
     }
 
     private fun startMonitoring() {
         sensorHelper.start()
-        Log.d("MonitoringService", "Sensors started automatically")
     }
 
     private fun setupSensorListeners() {
         sensorHelper.setListeners(
             onUpdate = { accel, gyro, gForce, status ->
-                val intent = Intent("SENSOR_UPDATE")
+                Log.d("MonitoringService", "Sensor Update: G=$gForce")
+                val intent = Intent("SENSOR_UPDATE").apply {
+                    `package` = packageName
+                }
                 intent.putExtra("accel", accel)
                 intent.putExtra("gyro", gyro)
                 intent.putExtra("gForce", gForce)
@@ -210,27 +211,38 @@ class MonitoringService : Service() {
                 sendBroadcast(intent)
             },
             onCrash = {
-                startEmergencyCountdown()
+                startEmergencyActivity()
             }
         )
-        sensorHelper.isWatchStable = {
-            bleHelper.isDeviceConnected()
-        }
+        sensorHelper.isWatchStable = { bleHelper.isDeviceConnected() }
     }
 
     private fun setupBleListeners() {
         bleHelper.onConnectionStateChange = { connected, name ->
-            val intent = Intent("BLE_CONNECTION_UPDATE")
+            val intent = Intent("BLE_CONNECTION_UPDATE").apply {
+                `package` = packageName
+            }
             intent.putExtra("connected", connected)
             intent.putExtra("name", name)
             sendBroadcast(intent)
         }
+        bleHelper.onRssiUpdate = { rssi, distance ->
+            val intent = Intent("BLE_RSSI_UPDATE").apply {
+                `package` = packageName
+            }
+            intent.putExtra("rssi", rssi)
+            intent.putExtra("distance", distance)
+            sendBroadcast(intent)
+        }
     }
 
-    private fun startEmergencyCountdown() {
-        val intent = Intent("EMERGENCY_START")
-        sendBroadcast(intent)
-        countdownManager.start()
+    private fun startEmergencyActivity() {
+        val intent = Intent(this, EmergencyActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+        }
+        startActivity(intent)
+        sendBroadcast(Intent("EMERGENCY_START").apply { `package` = packageName })
     }
 
     private fun executeEmergencyProtocol() {
@@ -239,29 +251,44 @@ class MonitoringService : Service() {
         val contacts = profileManager.getContacts()
         val name = profile["name"] ?: "User"
         
+        val hospitals = listOf(
+            "Apollo Emergency" to "911", // Using 911 as placeholder for demo
+            "City Hospital" to "102",
+            "Fortis Emergency" to "108"
+        )
+        
         locationHelper.fetchLastLocation { location ->
             val mapsLink = location?.let { locationHelper.getGoogleMapsLink(it) } ?: "Location unavailable"
             
             val message = """
-                🚨 EMERGENCY: Possible accident detected for $name
+                🚨 POSSIBLE ACCIDENT DETECTED
                 
-                👤 Medical Info:
-                Blood: ${profile["bloodGroup"]}
-                Allergies: ${profile["allergies"]}
+                User: $name
                 
-                📍 LIVE LOCATION:
+                Blood Group: ${profile["bloodGroup"]}
+                
+                Medical Info: ${profile["allergies"]}
+                
+                Location:
                 $mapsLink
                 
-                ⌚ Watch: ${if (bleHelper.isDeviceConnected()) "Connected (FB BGS003)" else "Disconnected"}
-                🎤 Voice: Distress phrase detected
+                Status: 
+                Possible accident detected. 
+                Immediate assistance may be required.
                 
                 Sent by CraDet System
             """.trimIndent()
 
-            val contactPairs = contacts.map { it.name to it.phone }
+            val contactPairs = contacts.map { it.name to it.phone }.toMutableList()
+            contactPairs.addAll(hospitals)
+
             smsHelper.broadcastEmergency(contactPairs, message)
             
-            val intent = Intent("EMERGENCY_EXECUTED")
+            val intent = Intent("EMERGENCY_EXECUTED").apply {
+                `package` = packageName
+            }
+            intent.putExtra("lat", location?.latitude)
+            intent.putExtra("lon", location?.longitude)
             sendBroadcast(intent)
         }
     }
@@ -270,51 +297,33 @@ class MonitoringService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        Log.d("MonitoringService", "Service Destroyed")
         isRunning = false
         sensorHelper.stop()
-        bleHelper.stopWatchdog()
         bleHelper.disconnect()
-        countdownManager.release()
         speechRecognizer?.destroy()
         handler.removeCallbacksAndMessages(null)
     }
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val serviceChannel = NotificationChannel(
-                CHANNEL_ID,
-                "CraDet Monitoring Service Channel",
-                NotificationManager.IMPORTANCE_LOW
-            )
             val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(serviceChannel)
+            manager.createNotificationChannel(NotificationChannel(
+                CHANNEL_ID, "Monitoring", NotificationManager.IMPORTANCE_LOW
+            ))
         }
     }
 
     private fun createNotification(): Notification {
-        val notificationIntent = Intent(this, MainActivity::class.java)
         val pendingIntent = PendingIntent.getActivity(
-            this, 0, notificationIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+            this, 0, Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
         )
-
-        val stopIntent = Intent(this, MonitoringService::class.java).apply {
-            action = ACTION_STOP
-        }
-        val stopPendingIntent = PendingIntent.getService(
-            this, 0, stopIntent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
-
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("🚨 CraDet Monitoring Active")
             .setContentText("Sensors and emergency protection running")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Stop Monitoring", stopPendingIntent)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
 }

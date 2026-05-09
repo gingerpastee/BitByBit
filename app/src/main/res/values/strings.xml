@@ -35,10 +35,16 @@
     <string name="listening_help">Listening for \'HELP\'...</string>
     <string name="watch_status_label">⌚ SMARTWATCH STATUS</string>
     <string name="simulation_panel_label">🧪 SIMULATION &amp; DEMO MODE</string>
-    <string name="vitals_label">❤️ FUTURISTIC HEALTH VITALS</string>
-    <string name="rssi_label">📶 RSSI SIGNAL</string>
-    <string name="distance_label">📏 DISTANCE</string>
-    <string name="accelerometer_label">📡 ACCELEROMETER</string>
-    <string name="gyroscope_label">🔄 GYROSCOPE</string>
-    <string name="gforce_label">⚡ G-FORCE</string>
+    <string name="vitals_label">HEALTH VITALS (SIMULATED)</string>
+    <string name="heart_label">❤️ HEART</string>
+    <string name="spo2_label">🩸 SpO2</string>
+    <string name="bp_label">🩺 BP</string>
+    <string name="watch_sync_label">⌚ Smartwatch Sync</string>
+    <string name="searching_device">Searching for device...</string>
+    <string name="placeholder_rssi">-- dBm</string>
+    <string name="placeholder_distance">-- meters</string>
+    <string name="sensors_realtime_label">DEVICE SENSORS (REAL-TIME)</string>
+    <string name="voice_sensor_label">🎤 VOICE DISTRESS SENSOR</string>
+    <string name="listening_help_help">Listening for \'HELP HELP\'...</string>
+    <string name="manage_contacts">📞 EMERGENCY CONTACTS</string>
 </resources>
